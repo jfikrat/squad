@@ -2,13 +2,21 @@
 
 Multi-agent MCP server - Codex ve Gemini entegrasyonu.
 
+## Tools
+
+| Tool | Parametreler | Açıklama |
+|------|--------------|----------|
+| `codex` | `message`, `workDir`, `reasoning_effort?` | GPT-5.2 Codex (xhigh/high/medium/low, default: xhigh) |
+| `gemini` | `message`, `workDir`, `model?` | Gemini 3 (flash/pro, default: flash) |
+| `parallel_search` | `queries`, `workDir` | 2 Gemini + 2 Codex paralel (max 4 query) |
+
 ## Proje Yapısı
 
 ```
 src/
 ├── index.ts              # MCP sunucu entry point
 ├── config/
-│   └── agents.ts         # Agent konfigürasyonları (komutlar, timeout, regex)
+│   └── agents.ts         # Agent konfigürasyonları
 ├── core/
 │   ├── tmux-manager.ts   # tmux session yönetimi
 │   ├── codex-session.ts  # Codex JSONL session okuma
@@ -16,12 +24,12 @@ src/
 │   ├── response-parser.ts # Yanıt temizleme
 │   └── session-watcher.ts # Dosya izleme utilities
 ├── agents/
-│   ├── codex.ts          # Codex agent (xhigh/medium)
-│   └── gemini.ts         # Gemini agent (flash/pro/parallel)
+│   ├── codex.ts          # Codex agent
+│   └── gemini.ts         # Gemini agent
 └── tools/
-    ├── codex-tools.ts    # MCP tool tanımları (Codex)
-    ├── gemini-tools.ts   # MCP tool tanımları (Gemini)
-    └── status-tools.ts   # Agent status/event tools
+    ├── codex-tools.ts    # Codex tool
+    ├── gemini-tools.ts   # Gemini + parallel_search tools
+    └── status-tools.ts   # poll_events, wait_for_event, get_agent_status
 ```
 
 ## Komutlar
@@ -31,29 +39,13 @@ bun run start              # MCP sunucuyu başlat
 bun run build && bun run lint  # Build ve lint
 ```
 
-## Agent'lar
-
-| Agent | Amaç | Kullanım |
-|-------|------|----------|
-| `codex_xhigh` | Derin analiz, debug, mimari review | Karmaşık problemler |
-| `codex_medium` | Orta seviye analiz | Genel sorular |
-| `gemini_flash` | Hızlı kod üretimi | Quick code gen |
-| `gemini_pro` | UI/UX, design, planlama | Yaratıcı işler |
-| `gemini_parallel_search` | Paralel web araması (max 5) | Research |
-
 ## Mimari Notlar
 
-- **tmux tabanlı**: Her agent ayrı tmux session'da çalışır, crash durumunda state korunur
+- **tmux tabanlı**: Her agent ayrı tmux session'da çalışır
 - **Request ID sistemi**: `[RQ-xxx]` / `[ANS-xxx]` marker'ları ile yanıt eşleştirme
-- **Polling**: Session dosyaları (JSON/JSONL) periyodik kontrol edilir
-- **Visible sessions**: Gemini agent'ları alacritty'de görünür tmux session açar
-
-## Konfigürasyon
-
-Agent ayarları `src/config/agents.ts` dosyasında:
-- Komut şablonları
-- Timeout süreleri
-- Yanıt regex pattern'leri
+- **60 dakika timeout**: Uzun analizler için yeterli süre
+- **Session terminated detection**: Terminal kapatılırsa anında hata
+- **Auto-cleanup**: Terminal kapanınca tmux session da kapanır (trap EXIT)
 
 ## Bağımlılıklar
 
@@ -69,8 +61,3 @@ Agent ayarları `src/config/agents.ts` dosyasında:
 | `SQUAD_TERMINAL` | Terminal emülatör | `alacritty` |
 
 **Desteklenen terminaller:** alacritty, urxvtc, kitty, wezterm, gnome-terminal, xterm
-
-```bash
-# Örnek: urxvt daemon kullanımı (düşük RAM)
-export SQUAD_TERMINAL=urxvtc
-```

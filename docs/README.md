@@ -1,16 +1,25 @@
-# Squad MCP - Araştırma Dokümanları
+# Squad MCP - Multi-Agent Server
 
-**Tarih:** 2026-01-30
+**Tarih:** 2026-01-31
 **Amaç:** Claude Code için Gemini CLI ve Codex CLI entegrasyonu
 
 ---
 
-## Dokümanlar
+## Tools
 
-| Dosya | İçerik |
-|-------|--------|
-| [gemini-tmux-research.md](./gemini-tmux-research.md) | Gemini CLI araştırması |
-| [codex-research.md](./codex-research.md) | Codex CLI araştırması |
+| Tool | Açıklama | Parametreler |
+|------|----------|--------------|
+| `codex` | GPT-5.2 Codex | `message`, `workDir`, `reasoning_effort?` (xhigh/high/medium/low, default: xhigh) |
+| `gemini` | Gemini 3 | `message`, `workDir`, `model?` (flash/pro, default: flash) |
+| `parallel_search` | 2 Gemini + 2 Codex paralel | `queries` (max 4), `workDir` |
+
+### Utility Tools
+
+| Tool | Açıklama |
+|------|----------|
+| `poll_events` | Agent event'lerini al |
+| `wait_for_event` | Belirli event bekle |
+| `get_agent_status` | Agent durumunu kontrol et |
 
 ---
 
@@ -25,8 +34,7 @@ cd squad
 bun install
 
 # Terminal config (opsiyonel)
-cp .env.example .env
-# .env dosyasını düzenle: SQUAD_TERMINAL=alacritty
+export SQUAD_TERMINAL=alacritty  # veya urxvtc, kitty, wezterm
 
 # Başlat
 bun run start
@@ -34,48 +42,33 @@ bun run start
 
 ---
 
-## Özet Karşılaştırma
+## Kullanım Örnekleri
 
-### Temel Farklar
-
-| Özellik | Gemini CLI | Codex CLI |
-|---------|------------|-----------|
-| **Interactive** | `gemini` | `codex` |
-| **Non-Interactive** | `gemini -p "prompt"` | `codex exec "prompt"` |
-| **JSON Output** | `-o json` (settings) | `--json` (JSONL) |
-| **Config** | `~/.gemini/settings.json` | `~/.codex/config.toml` |
-| **Sessions** | `~/.gemini/tmp/{hash}/chats/*.json` | `~/.codex/sessions/{date}/*.jsonl` |
-
-### Slash Command Davranışı
-
-| Input | Gemini | Codex |
-|-------|--------|-------|
-| `/help` | ❌ Slash command | ❌ Slash command |
-| `/help nedir?` | ❌ Slash command | ✅ Normal prompt |
-| `Soru: /help nedir?` | ✅ Normal prompt | ✅ Normal prompt |
-
-**Sonuç:**
-- Gemini'de `Soru: ` prefix'i ŞART
-- Codex'te prefix gerekmez
-
-### Parse Stratejileri
-
-**Gemini:**
+### Codex
 ```typescript
-// Session JSON'dan son mesajı al
-const session = JSON.parse(fs.readFileSync(sessionFile))
-const lastMsg = session.messages.filter(m => m.type === 'gemini').pop()
-const response = lastMsg.content.replace(/◆END◆/g, '').trim()
+// Default (xhigh reasoning)
+codex({ message: "Bu kodu analiz et", workDir: "/project" })
+
+// Medium reasoning (daha hızlı)
+codex({ message: "Basit soru", workDir: "/project", reasoning_effort: "medium" })
 ```
 
-**Codex:**
+### Gemini
 ```typescript
-// JSONL'den agent_message event'lerini filtrele
-const events = lines.map(line => JSON.parse(line))
-const lastMsg = events
-  .filter(e => e.payload?.type === 'agent_message')
-  .pop()
-const response = lastMsg.payload.message
+// Default (flash)
+gemini({ message: "Kod yaz", workDir: "/project" })
+
+// Pro (daha detaylı)
+gemini({ message: "UI/UX analizi", workDir: "/project", model: "pro" })
+```
+
+### Parallel Search
+```typescript
+// 4 query: 2 gemini_flash + 2 codex_medium
+parallel_search({
+  queries: ["Soru 1", "Soru 2", "Soru 3", "Soru 4"],
+  workDir: "/project"
+})
 ```
 
 ---
@@ -88,8 +81,9 @@ const response = lastMsg.payload.message
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
-│  │ gemini_flash │    │ gemini_pro   │    │ codex_medium │  │
-│  │ parallel_search   │              │    │ codex_xhigh  │  │
+│  │    codex     │    │    gemini    │    │   parallel   │  │
+│  │  (xhigh/     │    │  (flash/pro) │    │    search    │  │
+│  │   medium)    │    │              │    │  (2+2 agent) │  │
 │  └──────┬───────┘    └──────┬───────┘    └──────┬───────┘  │
 │         │                   │                   │           │
 │         ▼                   ▼                   ▼           │
@@ -112,34 +106,23 @@ const response = lastMsg.payload.message
 
 ---
 
-## Implementation Checklist
+## Özellikler
 
-### Phase 1: Core Infrastructure ✅
-- [x] TypeScript proje yapısı (MCP SDK)
-- [x] tmux session manager
-- [x] Unified config (agents, models, workdirs)
-- [x] Terminal emülatör konfigürasyonu (SQUAD_TERMINAL)
+### Session Management
+- **60 dakika timeout** - Uzun analizler için yeterli süre
+- **Session terminated detection** - Kullanıcı terminali kapatırsa anında hata
+- **Auto-cleanup** - Terminal kapanınca tmux session da kapanır (trap EXIT)
+- **Multi-turn conversation** - Aynı session'da devam eden konuşma
 
-### Phase 2: Gemini Integration ✅
-- [x] Gemini session watcher
-- [x] Gemini response parser (◆END◆ marker)
-- [x] Safe prefix injection (`Soru: `)
-- [x] Request ID sistemi ([RQ-xxx] / [ANS-xxx])
+### Error Handling
+- `Codex session terminated by user` - Session manuel kapatıldı
+- `Gemini session terminated by user` - Session manuel kapatıldı
+- `Response timeout after Xms` - Timeout aşıldı
 
-### Phase 3: Codex Integration ✅
-- [x] Codex session watcher (tarih bazlı)
-- [x] Codex JSONL parser (agent_message)
-- [x] Reasoning effort config (xhigh/medium)
-
-### Phase 4: Advanced Features ✅
-- [x] Parallel agent execution (gemini_parallel_search)
-- [x] Error handling & timeouts
-- [x] Event sistemi (poll_events, wait_for_event)
-- [x] Agent status tracking
-- [x] Multi-turn conversation (aynı tmux session devam ediyor)
-
-### Phase 5: Future (Gerekirse)
-- [ ] MCP tool passthrough (agent tool'larını Claude Code'a sun)
+### Performance
+- **Dynamic paste delay** - Uzun promptlar için otomatik bekleme süresi
+- **500ms poll interval** - Düşük CPU kullanımı
+- **Parallel execution** - 4 agent aynı anda çalışabilir
 
 ---
 
@@ -166,49 +149,36 @@ export SQUAD_TERMINAL=urxvtc
 
 ---
 
-## Key Findings
+## Araştırma Dokümanları
 
-### 1. Session Timing
-- **Gemini:** Session dosyası prompt gönderildikten SONRA oluşur
-- **Codex:** Session dosyası hemen oluşur
-
-### 2. Response Detection
-- **Gemini:** `◆END◆` marker + `[ANS-xxx]` kontrolü
-- **Codex:** `type: "agent_message"` + `[ANS-xxx]` kontrolü
-
-### 3. Project Hash
-- **Gemini:** SHA256(workDir) → session klasörü
-- **Codex:** Tarih bazlı dizin → direkt hesaplanabilir
-
-### 4. MCP Support
-- **Gemini:** Sadece MCP client
-- **Codex:** MCP client + MCP server (`codex mcp-server`)
+| Dosya | İçerik |
+|-------|--------|
+| [gemini-tmux-research.md](./gemini-tmux-research.md) | Gemini CLI araştırması |
+| [codex-research.md](./codex-research.md) | Codex CLI araştırması |
 
 ---
 
-## Quick Reference
+## CLI Karşılaştırması
 
-### Gemini Commands
-```bash
-gemini                      # Interactive
-gemini -p "prompt"          # Non-interactive
-gemini -m gemini-3-flash-preview  # Model seçimi
-```
+| Özellik | Gemini CLI | Codex CLI |
+|---------|------------|-----------|
+| **Config** | `~/.gemini/settings.json` | `~/.codex/config.toml` |
+| **Sessions** | `~/.gemini/tmp/{hash}/chats/*.json` | `~/.codex/sessions/{date}/*.jsonl` |
+| **Safe prefix** | `Soru: ` (gerekli) | Gerekmez |
+| **Response marker** | `◆END◆` + `[ANS-xxx]` | `[ANS-xxx]` |
 
-### Codex Commands
-```bash
-codex                       # Interactive
-codex exec "prompt"         # Non-interactive
-codex exec --json "prompt"  # JSONL output
-codex mcp-server            # MCP server mode
-```
+---
 
-### tmux Commands
-```bash
-tmux new-session -d -s NAME -c /path    # Detached session
-tmux send-keys -t NAME 'cmd' Enter      # Komut gönder
-tmux set-buffer -b BUF "text"           # Buffer'a yaz
-tmux paste-buffer -t NAME -b BUF        # Yapıştır
-tmux capture-pane -t NAME -p            # Output al
-tmux kill-session -t NAME               # Session kapat
-```
+## Implementation Status
+
+### Completed
+- [x] Unified tools (codex, gemini, parallel_search)
+- [x] Dynamic reasoning effort / model selection
+- [x] 60 dakika timeout
+- [x] Session terminated detection
+- [x] Terminal close cleanup (trap EXIT)
+- [x] Multi-turn conversation
+- [x] Event system (poll_events, wait_for_event)
+
+### Future
+- [ ] MCP tool passthrough
