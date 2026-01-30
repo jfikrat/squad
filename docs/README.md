@@ -131,15 +131,16 @@ const response = lastMsg.payload.message
 - [x] Codex JSONL parser (agent_message)
 - [x] Reasoning effort config (xhigh/medium)
 
-### Phase 4: Advanced Features
+### Phase 4: Advanced Features ✅
 - [x] Parallel agent execution (gemini_parallel_search)
 - [x] Error handling & timeouts
 - [x] Event sistemi (poll_events, wait_for_event)
 - [x] Agent status tracking
-- [ ] Multi-turn conversation (aynı session'da devam)
-- [ ] Session resume/fork
-- [ ] MCP tool passthrough
-- [ ] Non-interactive mode fallback
+- [x] Multi-turn conversation (aynı tmux session devam ediyor)
+
+### Phase 5: Future (Gerekirse)
+- [ ] MCP tool passthrough (agent tool'larını Claude Code'a sun)
+- [ ] Non-interactive mode fallback (`codex exec` / `gemini -p`)
 
 ---
 
