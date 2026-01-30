@@ -10,51 +10,23 @@ export interface AgentConfig {
 }
 
 export const AGENTS: Record<string, AgentConfig> = {
-	gemini_flash: {
-		name: "gemini_flash",
-		command: ["gemini", "-m", "gemini-3-flash-preview", "-y"],
+	gemini: {
+		name: "gemini",
+		command: ["gemini", "-y"],
 		safePrefix: "Soru: ",
 		responseMarker: "◆END◆",
 		readyPatterns: ["YOLO mode", "Type your message", "Model:"],
 		responseDetection: "marker",
-		timeout: 120000,
+		timeout: 3600000, // 60 dakika
 	},
-	gemini_pro: {
-		name: "gemini_pro",
-		command: ["gemini", "-m", "gemini-3-pro-preview", "-y"],
-		safePrefix: "Soru: ",
-		responseMarker: "◆END◆",
-		readyPatterns: ["YOLO mode", "Type your message", "Model:"],
-		responseDetection: "marker",
-		timeout: 180000,
-	},
-	codex_xhigh: {
-		name: "codex_xhigh",
-		command: [
-			"codex",
-			"--dangerously-bypass-approvals-and-sandbox",
-			"-c",
-			'model_reasoning_effort="xhigh"',
-		],
+	codex: {
+		name: "codex",
+		command: ["codex", "--dangerously-bypass-approvals-and-sandbox"],
 		safePrefix: null,
 		readyPatterns: ["? for shortcuts", "context left", "How can I help"],
 		sessionPath: "~/.codex/sessions",
 		responseDetection: "jsonl",
-		timeout: 300000,
-	},
-	codex_medium: {
-		name: "codex_medium",
-		command: [
-			"codex",
-			"--dangerously-bypass-approvals-and-sandbox",
-			"-c",
-			'model_reasoning_effort="medium"',
-		],
-		safePrefix: null,
-		readyPatterns: ["? for shortcuts", "context left", "How can I help"],
-		sessionPath: "~/.codex/sessions",
-		responseDetection: "jsonl",
-		timeout: 180000,
+		timeout: 3600000, // 60 dakika
 	},
 };
 

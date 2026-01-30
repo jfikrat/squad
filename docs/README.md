@@ -140,7 +140,6 @@ const response = lastMsg.payload.message
 
 ### Phase 5: Future (Gerekirse)
 - [ ] MCP tool passthrough (agent tool'larını Claude Code'a sun)
-- [ ] Non-interactive mode fallback (`codex exec` / `gemini -p`)
 
 ---
 

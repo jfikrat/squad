@@ -46,8 +46,10 @@ export async function createSession(
 	activeSessions.set(name, session);
 
 	// Terminal emülatör ile session'a attach et (arka planda)
+	// Terminal kapandığında session'ı da öldür (trap ile SIGHUP/EXIT yakala)
 	const execArgs = TERMINAL_EXEC_ARGS[TERMINAL_EMULATOR] || ["-e"];
-	Bun.spawn([TERMINAL_EMULATOR, ...execArgs, "tmux", "attach", "-t", name], {
+	const attachCmd = `trap 'tmux kill-session -t ${name} 2>/dev/null' EXIT; tmux attach -t ${name}`;
+	Bun.spawn([TERMINAL_EMULATOR, ...execArgs, "sh", "-c", attachCmd], {
 		stdout: "ignore",
 		stderr: "ignore",
 	});
@@ -95,8 +97,10 @@ export async function sendBuffer(session: string, text: string): Promise<void> {
 	await $`tmux delete-buffer -b ${bufferName}`.quiet();
 	await $`rm -f ${tempFile}`.quiet();
 
-	// Paste sonrası biraz bekle, sonra Enter gönder
-	await Bun.sleep(100);
+	// Paste sonrası metin uzunluğuna göre bekle, sonra Enter gönder
+	// Her 500 karakter için +50ms, minimum 150ms
+	const waitTime = Math.max(150, Math.ceil(text.length / 500) * 50 + 100);
+	await Bun.sleep(waitTime);
 	await $`tmux send-keys -t ${session} Enter`.quiet();
 
 	const s = activeSessions.get(session);

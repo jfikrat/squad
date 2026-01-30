@@ -94,7 +94,11 @@ export async function sendCodexPrompt(
 		await sendBuffer(sessionName, fullPrompt);
 
 		// Response bekle (JSON parsing)
-		const response = await waitForCodexResponse(requestId, config.timeout);
+		const response = await waitForCodexResponse(
+			requestId,
+			config.timeout,
+			sessionName,
+		);
 
 		// Event ekle
 		addEvent(config.name, {
@@ -128,10 +132,18 @@ export async function sendCodexPrompt(
 async function waitForCodexResponse(
 	requestId: string,
 	timeout: number,
+	sessionName: string,
 ): Promise<string> {
 	const startTime = Date.now();
 
 	while (Date.now() - startTime < timeout) {
+		// Session hala var mı kontrol et (kullanıcı manuel kapatmış olabilir)
+		if (!(await hasSession(sessionName))) {
+			throw new Error(
+				`Codex session terminated by user (requestId: ${requestId})`,
+			);
+		}
+
 		// Session JSONL'den yanıt ara
 		const latestFile = getLatestCodexSessionFile();
 		if (latestFile) {
@@ -141,7 +153,7 @@ async function waitForCodexResponse(
 			}
 		}
 
-		await Bun.sleep(200);
+		await Bun.sleep(500);
 	}
 
 	throw new Error(

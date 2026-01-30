@@ -1,5 +1,11 @@
 import { sendGeminiPrompt } from "../agents/gemini";
-import { AGENTS, MAX_PARALLEL_SEARCH } from "../config/agents";
+import type { AgentConfig } from "../config/agents";
+import { AGENTS } from "../config/agents";
+import {
+	findCodexResponseByRequestId,
+	generateCodexRequestId,
+	getLatestCodexSessionFile,
+} from "../core/codex-session";
 import {
 	findResponseByRequestId,
 	generateRequestId,
@@ -9,36 +15,22 @@ import {
 import {
 	capturePane,
 	createSession,
+	hasSession,
 	killSession,
 	sendBuffer,
-	sendKeys,
 } from "../core/tmux-manager";
 
-export const geminiFlashTool = {
-	name: "gemini_flash",
-	description:
-		"Gemini 3 Flash for fast code generation. High-quality code writing with speed. Uses native Gemini CLI in visible tmux session. IMPORTANT: Always pass your current working directory (pwd) as workDir so Gemini can access project files.",
-	inputSchema: {
-		type: "object",
-		properties: {
-			message: {
-				type: "string",
-				description: "The coding task or request",
-			},
-			workDir: {
-				type: "string",
-				description:
-					"Working directory for Gemini to access project files. Always pass your current pwd.",
-			},
-		},
-		required: ["message", "workDir"],
-	},
+export type GeminiModel = "flash" | "pro";
+
+const MODEL_MAP: Record<GeminiModel, string> = {
+	flash: "gemini-3-flash-preview",
+	pro: "gemini-3-pro-preview",
 };
 
-export const geminiProTool = {
-	name: "gemini_pro",
+export const geminiTool = {
+	name: "gemini",
 	description:
-		"Gemini 3 Pro for UI/UX design, feature planning, and creative analysis. Has full file access. Uses native Gemini CLI in visible tmux session. IMPORTANT: Always pass your current working directory (pwd) as workDir so Gemini can access project files.",
+		"Gemini 3 for fast code generation and creative analysis. Uses native Gemini CLI in visible tmux session. IMPORTANT: Always pass your current working directory (pwd) as workDir so Gemini can access project files.",
 	inputSchema: {
 		type: "object",
 		properties: {
@@ -51,45 +43,63 @@ export const geminiProTool = {
 				description:
 					"Working directory for Gemini to access project files. Always pass your current pwd.",
 			},
+			model: {
+				type: "string",
+				enum: ["flash", "pro"],
+				description:
+					"Model to use. flash for speed, pro for complex analysis. Default: flash",
+			},
 		},
 		required: ["message", "workDir"],
 	},
 };
 
-export const geminiParallelSearchTool = {
-	name: "gemini_parallel_search",
+export const parallelSearchTool = {
+	name: "parallel_search",
 	description:
-		"Multiple visible tmux sessions for parallel search. Max 5 concurrent queries. IMPORTANT: Always pass your current working directory (pwd) as workDir.",
+		"Parallel search using multiple AI agents (2 Gemini Flash + 2 Codex Medium). Max 4 queries distributed automatically. IMPORTANT: Always pass your current working directory (pwd) as workDir.",
 	inputSchema: {
 		type: "object",
 		properties: {
 			queries: {
 				type: "array",
 				items: { type: "string" },
-				maxItems: MAX_PARALLEL_SEARCH,
-				description: "Array of search queries (max 5)",
+				maxItems: 4,
+				description:
+					"Array of search queries (max 4, distributed: 2 gemini + 2 codex)",
 			},
 			workDir: {
 				type: "string",
 				description:
-					"Working directory for Gemini. Always pass your current pwd.",
-			},
-			model: {
-				type: "string",
-				enum: ["gemini-3-flash-preview", "gemini-3-pro-preview"],
-				default: "gemini-3-flash-preview",
-				description: "Model to use (default: flash)",
+					"Working directory for agents. Always pass your current pwd.",
 			},
 		},
 		required: ["queries", "workDir"],
 	},
 };
 
-export async function handleGeminiFlash(args: {
+function getGeminiConfig(model: GeminiModel): AgentConfig {
+	const base = AGENTS.gemini;
+	const modelId = MODEL_MAP[model];
+	return {
+		...base,
+		name: `gemini_${model}`,
+		command: [
+			...base.command.slice(0, 1),
+			"-m",
+			modelId,
+			...base.command.slice(1),
+		],
+	};
+}
+
+export async function handleGemini(args: {
 	message: string;
 	workDir: string;
+	model?: GeminiModel;
 }): Promise<{ content: Array<{ type: string; text: string }> }> {
-	const config = AGENTS.gemini_flash;
+	const model = args.model || "flash";
+	const config = getGeminiConfig(model);
 	const result = await sendGeminiPrompt(config, args.workDir, args.message);
 
 	if (result.success) {
@@ -113,85 +123,93 @@ export async function handleGeminiFlash(args: {
 	};
 }
 
-export async function handleGeminiPro(args: {
-	message: string;
-	workDir: string;
-}): Promise<{ content: Array<{ type: string; text: string }> }> {
-	const config = AGENTS.gemini_pro;
-	const result = await sendGeminiPrompt(config, args.workDir, args.message);
-
-	if (result.success) {
-		return {
-			content: [
-				{
-					type: "text",
-					text: result.response || "No response received",
-				},
-			],
-		};
-	}
-
-	return {
-		content: [
-			{
-				type: "text",
-				text: `Error: ${result.error}`,
-			},
-		],
-	};
-}
-
-export async function handleGeminiParallelSearch(args: {
+export async function handleParallelSearch(args: {
 	queries: string[];
 	workDir: string;
-	model?: string;
 }): Promise<{ content: Array<{ type: string; text: string }> }> {
-	const queries = args.queries.slice(0, MAX_PARALLEL_SEARCH);
-	const model = args.model || "gemini-3-flash-preview";
-	const marker = "◆END◆";
+	const queries = args.queries.slice(0, 4);
+	const results: Array<{ query: string; response: string; agent: string }> = [];
 
-	const results: Array<{ query: string; response: string }> = [];
+	// Query'leri dağıt: ilk yarısı gemini, ikinci yarısı codex
+	const half = Math.ceil(queries.length / 2);
+	const geminiQueries = queries.slice(0, half);
+	const codexQueries = queries.slice(half);
 
-	// Her query için ayrı session oluştur
-	const sessionPromises = queries.map(async (query, index) => {
-		const sessionName = `agents_parallel_${index}`;
+	// Gemini session'ları
+	const geminiPromises = geminiQueries.map(async (query, index) => {
+		const sessionName = `agents_parallel_gemini_${index}`;
 		const requestId = generateRequestId();
 
 		try {
-			// Session oluştur
 			await createSession(sessionName, args.workDir, [
 				"gemini",
 				"-m",
-				model,
+				"gemini-3-flash-preview",
 				"-y",
 			]);
 
-			// Ready bekle
 			await waitForGeminiReady(sessionName, 30000);
 
-			// Query gönder (request ID ile, multiline olduğu için sendBuffer)
 			const safeQuery = `[RQ-${requestId}] Soru: ${query}\n\nYanıtının sonuna "[ANS-${requestId}]" yaz.`;
 			await sendBuffer(sessionName, safeQuery);
 
-			// Response bekle (JSON parsing)
 			const response = await waitForGeminiResponse(
 				args.workDir,
 				requestId,
 				120000,
 			);
 
-			return { query, response };
+			return { query, response, agent: "gemini_flash" };
 		} catch (err) {
-			return { query, response: `Error: ${(err as Error).message}` };
+			return {
+				query,
+				response: `Error: ${(err as Error).message}`,
+				agent: "gemini_flash",
+			};
 		} finally {
-			// Session'ı kapat
+			await killSession(sessionName);
+		}
+	});
+
+	// Codex session'ları
+	const codexPromises = codexQueries.map(async (query, index) => {
+		const sessionName = `agents_parallel_codex_${index}`;
+		const requestId = generateCodexRequestId();
+
+		try {
+			await createSession(sessionName, args.workDir, [
+				"codex",
+				"--dangerously-bypass-approvals-and-sandbox",
+				"-c",
+				'model_reasoning_effort="medium"',
+			]);
+
+			await waitForCodexReady(sessionName, 30000);
+
+			const fullPrompt = `[RQ-${requestId}] ${query}\n\nIMPORTANT: End your response with "[ANS-${requestId}]"`;
+			await sendBuffer(sessionName, fullPrompt);
+
+			const response = await waitForCodexResponse(
+				requestId,
+				120000,
+				sessionName,
+			);
+
+			return { query, response, agent: "codex_medium" };
+		} catch (err) {
+			return {
+				query,
+				response: `Error: ${(err as Error).message}`,
+				agent: "codex_medium",
+			};
+		} finally {
 			await killSession(sessionName);
 		}
 	});
 
 	// Tüm query'leri paralel çalıştır
-	const parallelResults = await Promise.all(sessionPromises);
-	results.push(...parallelResults);
+	const allResults = await Promise.all([...geminiPromises, ...codexPromises]);
+	results.push(...allResults);
 
 	// İstatistikler
 	const total = results.length;
@@ -199,14 +217,18 @@ export async function handleGeminiParallelSearch(args: {
 		(r) => !r.response.startsWith("Error:"),
 	).length;
 	const failed = total - successful;
+	const geminiCount = results.filter((r) => r.agent === "gemini_flash").length;
+	const codexCount = results.filter((r) => r.agent === "codex_medium").length;
 
 	// Sonuçları formatla
 	const formattedResults = results
-		.map((r, i) => `## Query ${i + 1}: ${r.query}\n\n${r.response}`)
+		.map(
+			(r, i) => `## Query ${i + 1} [${r.agent}]: ${r.query}\n\n${r.response}`,
+		)
 		.join("\n\n---\n\n");
 
 	// Özet ekle
-	const summary = `📊 **${total} query | ${successful} başarılı | ${failed} başarısız**\n\n---\n\n`;
+	const summary = `📊 **${total} query (${geminiCount} gemini + ${codexCount} codex) | ${successful} başarılı | ${failed} başarısız**\n\n---\n\n`;
 
 	return {
 		content: [
@@ -263,4 +285,55 @@ async function waitForGeminiResponse(
 	}
 
 	throw new Error(`Response timeout (requestId: ${requestId})`);
+}
+
+async function waitForCodexReady(
+	sessionName: string,
+	timeout: number,
+): Promise<void> {
+	const patterns = ["? for shortcuts", "context left", "How can I help"];
+	const startTime = Date.now();
+
+	while (Date.now() - startTime < timeout) {
+		const output = await capturePane(sessionName);
+
+		for (const pattern of patterns) {
+			if (output.includes(pattern)) {
+				await Bun.sleep(500);
+				return;
+			}
+		}
+
+		await Bun.sleep(200);
+	}
+
+	throw new Error("Codex ready timeout");
+}
+
+async function waitForCodexResponse(
+	requestId: string,
+	timeout: number,
+	sessionName: string,
+): Promise<string> {
+	const startTime = Date.now();
+
+	while (Date.now() - startTime < timeout) {
+		// Session hala var mı kontrol et
+		if (!(await hasSession(sessionName))) {
+			throw new Error("Codex session terminated by user");
+		}
+
+		// Session JSONL'den yanıt ara
+		const latestFile = getLatestCodexSessionFile();
+		if (latestFile) {
+			const response = findCodexResponseByRequestId(latestFile, requestId);
+			if (response) {
+				return response;
+			}
+		}
+
+		await Bun.sleep(500);
+	}
+
+	throw new Error(`Codex response timeout (requestId: ${requestId})`);
 }

@@ -15,18 +15,16 @@ import {
 
 // Tool definitions
 import {
-	codexMediumTool,
-	codexXhighTool,
-	handleCodexMedium,
-	handleCodexXhigh,
+	type ReasoningEffort,
+	codexTool,
+	handleCodex,
 } from "./tools/codex-tools";
 import {
-	geminiFlashTool,
-	geminiParallelSearchTool,
-	geminiProTool,
-	handleGeminiFlash,
-	handleGeminiParallelSearch,
-	handleGeminiPro,
+	type GeminiModel,
+	geminiTool,
+	handleGemini,
+	handleParallelSearch,
+	parallelSearchTool,
 } from "./tools/gemini-tools";
 import {
 	getAgentStatusTool,
@@ -53,11 +51,9 @@ const server = new Server(
 server.setRequestHandler(ListToolsRequestSchema, async () => {
 	return {
 		tools: [
-			codexXhighTool,
-			codexMediumTool,
-			geminiFlashTool,
-			geminiProTool,
-			geminiParallelSearchTool,
+			codexTool,
+			geminiTool,
+			parallelSearchTool,
 			pollEventsTool,
 			waitForEventTool,
 			getAgentStatusTool,
@@ -70,27 +66,35 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 	const { name, arguments: args } = request.params;
 
 	switch (name) {
-		case "codex_xhigh":
-			return handleCodexXhigh(args as { message: string; workDir: string });
+		case "codex":
+			return handleCodex(
+				args as {
+					message: string;
+					workDir: string;
+					reasoning_effort?: ReasoningEffort;
+				},
+			);
 
-		case "codex_medium":
-			return handleCodexMedium(args as { message: string; workDir: string });
+		case "gemini":
+			return handleGemini(
+				args as { message: string; workDir: string; model?: GeminiModel },
+			);
 
-		case "gemini_flash":
-			return handleGeminiFlash(args as { message: string; workDir: string });
-
-		case "gemini_pro":
-			return handleGeminiPro(args as { message: string; workDir: string });
-
-		case "gemini_parallel_search":
-			return handleGeminiParallelSearch(
-				args as { queries: string[]; workDir: string; model?: string },
+		case "parallel_search":
+			return handleParallelSearch(
+				args as { queries: string[]; workDir: string },
 			);
 
 		case "poll_events":
 			return handlePollEvents(
 				args as {
-					agent: "codex_xhigh" | "codex_medium" | "gemini_flash" | "gemini_pro";
+					agent:
+						| "codex_xhigh"
+						| "codex_high"
+						| "codex_medium"
+						| "codex_low"
+						| "gemini_flash"
+						| "gemini_pro";
 					peek?: boolean;
 				},
 			);
@@ -98,7 +102,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 		case "wait_for_event":
 			return handleWaitForEvent(
 				args as {
-					agent: "codex_xhigh" | "codex_medium" | "gemini_flash" | "gemini_pro";
+					agent:
+						| "codex_xhigh"
+						| "codex_high"
+						| "codex_medium"
+						| "codex_low"
+						| "gemini_flash"
+						| "gemini_pro";
 					eventType: string;
 					timeoutMs?: number;
 					pollIntervalMs?: number;
@@ -108,7 +118,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 		case "get_agent_status":
 			return handleGetAgentStatus(
 				args as {
-					agent: "codex_xhigh" | "codex_medium" | "gemini_flash" | "gemini_pro";
+					agent:
+						| "codex_xhigh"
+						| "codex_high"
+						| "codex_medium"
+						| "codex_low"
+						| "gemini_flash"
+						| "gemini_pro";
 				},
 			);
 

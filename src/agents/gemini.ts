@@ -160,6 +160,13 @@ async function waitForResponse(
 	const sessionDir = getSessionDir(workDir);
 
 	while (Date.now() - startTime < timeout) {
+		// Session hala var mı kontrol et (kullanıcı manuel kapatmış olabilir)
+		if (!(await hasSession(sessionName))) {
+			throw new Error(
+				`Gemini session terminated by user (requestId: ${requestId})`,
+			);
+		}
+
 		// Session JSON'dan yanıt ara (güvenilir yöntem)
 		const latestFile = getLatestSessionFile(sessionDir);
 		if (latestFile) {
@@ -169,11 +176,11 @@ async function waitForResponse(
 			}
 		}
 
-		await Bun.sleep(200);
+		await Bun.sleep(500);
 	}
 
 	throw new Error(
-		`Response timeout after ${timeout}ms (requestId: ${requestId})`,
+		`Gemini response timeout after ${timeout}ms (requestId: ${requestId})`,
 	);
 }
 

@@ -3,9 +3,27 @@ import {
 	getGeminiStatus,
 	pollEvents as pollGeminiEvents,
 } from "../agents/gemini";
+import type { AgentConfig } from "../config/agents";
 import { AGENTS } from "../config/agents";
 
-type AgentType = "codex_xhigh" | "codex_medium" | "gemini_flash" | "gemini_pro";
+type AgentType =
+	| "codex_xhigh"
+	| "codex_high"
+	| "codex_medium"
+	| "codex_low"
+	| "gemini_flash"
+	| "gemini_pro";
+
+function getCodexConfig(agentName: string): AgentConfig | null {
+	if (!agentName.startsWith("codex_")) return null;
+	const effort = agentName.replace("codex_", "");
+	const base = AGENTS.codex;
+	return {
+		...base,
+		name: agentName,
+		command: [...base.command, "-c", `model_reasoning_effort="${effort}"`],
+	};
+}
 
 export const pollEventsTool = {
 	name: "poll_events",
@@ -16,7 +34,14 @@ export const pollEventsTool = {
 		properties: {
 			agent: {
 				type: "string",
-				enum: ["codex_xhigh", "codex_medium", "gemini_flash", "gemini_pro"],
+				enum: [
+					"codex_xhigh",
+					"codex_high",
+					"codex_medium",
+					"codex_low",
+					"gemini_flash",
+					"gemini_pro",
+				],
 				description: "Which agent to poll events from",
 			},
 			peek: {
@@ -38,7 +63,14 @@ export const waitForEventTool = {
 		properties: {
 			agent: {
 				type: "string",
-				enum: ["codex_xhigh", "codex_medium", "gemini_flash", "gemini_pro"],
+				enum: [
+					"codex_xhigh",
+					"codex_high",
+					"codex_medium",
+					"codex_low",
+					"gemini_flash",
+					"gemini_pro",
+				],
 				description: "Which agent to wait for",
 			},
 			eventType: {
@@ -68,7 +100,14 @@ export const getAgentStatusTool = {
 		properties: {
 			agent: {
 				type: "string",
-				enum: ["codex_xhigh", "codex_medium", "gemini_flash", "gemini_pro"],
+				enum: [
+					"codex_xhigh",
+					"codex_high",
+					"codex_medium",
+					"codex_low",
+					"gemini_flash",
+					"gemini_pro",
+				],
 				description: "Which agent to check status for",
 			},
 		},
@@ -194,7 +233,14 @@ export async function handleGetAgentStatus(args: {
 	agent: AgentType;
 }): Promise<{ content: Array<{ type: string; text: string }> }> {
 	const { agent } = args;
-	const config = AGENTS[agent];
+
+	let config: AgentConfig | null | undefined;
+
+	if (agent.startsWith("codex_")) {
+		config = getCodexConfig(agent);
+	} else {
+		config = AGENTS[agent];
+	}
 
 	if (!config) {
 		return {
