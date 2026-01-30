@@ -64,15 +64,30 @@ export async function sendEscape(session: string): Promise<void> {
 	await $`tmux send-keys -t ${session} Escape`.quiet();
 }
 
+export async function sendCtrlC(session: string): Promise<void> {
+	if (!(await hasSession(session))) {
+		throw new Error(`Session ${session} not found`);
+	}
+	await $`tmux send-keys -t ${session} C-c`.quiet();
+}
+
 export async function sendKeys(session: string, text: string): Promise<void> {
 	if (!(await hasSession(session))) {
 		throw new Error(`Session ${session} not found`);
 	}
 
 	// Tek satır metinler için send-keys kullan
-	await $`tmux send-keys -t ${session} -l ${text}`.quiet();
+	const textResult = await $`tmux send-keys -t ${session} -l ${text}`.nothrow();
+	if (textResult.exitCode !== 0) {
+		throw new Error(`Failed to send text: ${textResult.stderr}`);
+	}
+
 	await Bun.sleep(50); // Enter'ın düzgün alınması için kısa bekleme
-	await $`tmux send-keys -t ${session} Enter`.quiet();
+
+	const enterResult = await $`tmux send-keys -t ${session} Enter`.nothrow();
+	if (enterResult.exitCode !== 0) {
+		throw new Error(`Failed to send Enter: ${enterResult.stderr}`);
+	}
 
 	const s = activeSessions.get(session);
 	if (s) {
@@ -85,23 +100,38 @@ export async function sendBuffer(session: string, text: string): Promise<void> {
 		throw new Error(`Session ${session} not found`);
 	}
 
-	// Multiline metinler için buffer kullan
-	const bufferName = `buffer_${session}_${Date.now()}`;
-
-	// Geçici dosyaya yaz ve buffer'a yükle
+	// tmux buffer kullan (platform bağımsız)
+	const bufferName = `buf_${Date.now()}`;
 	const tempFile = `/tmp/${bufferName}.txt`;
+
 	await Bun.write(tempFile, text);
 
-	await $`tmux load-buffer -b ${bufferName} ${tempFile}`.quiet();
-	await $`tmux paste-buffer -b ${bufferName} -t ${session}`.quiet();
-	await $`tmux delete-buffer -b ${bufferName}`.quiet();
-	await $`rm -f ${tempFile}`.quiet();
+	const loadResult =
+		await $`tmux load-buffer -b ${bufferName} ${tempFile}`.nothrow();
+	if (loadResult.exitCode !== 0) {
+		await $`rm -f ${tempFile}`.nothrow();
+		throw new Error(`Failed to load buffer: ${loadResult.stderr}`);
+	}
 
-	// Paste sonrası metin uzunluğuna göre bekle, sonra Enter gönder
-	// Her 500 karakter için +50ms, minimum 150ms
-	const waitTime = Math.max(150, Math.ceil(text.length / 500) * 50 + 100);
-	await Bun.sleep(waitTime);
-	await $`tmux send-keys -t ${session} Enter`.quiet();
+	// -p = bracketed paste (uygulama paste'i tek input olarak algılar)
+	const pasteResult =
+		await $`tmux paste-buffer -p -b ${bufferName} -t ${session}`.nothrow();
+
+	// Cleanup
+	await $`tmux delete-buffer -b ${bufferName}`.nothrow();
+	await $`rm -f ${tempFile}`.nothrow();
+
+	if (pasteResult.exitCode !== 0) {
+		throw new Error(`Failed to paste buffer: ${pasteResult.stderr}`);
+	}
+
+	await Bun.sleep(100);
+
+	// Enter gönder
+	const enterResult = await $`tmux send-keys -t ${session} Enter`.nothrow();
+	if (enterResult.exitCode !== 0) {
+		throw new Error(`Failed to send Enter: ${enterResult.stderr}`);
+	}
 
 	const s = activeSessions.get(session);
 	if (s) {

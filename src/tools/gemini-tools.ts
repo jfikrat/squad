@@ -54,6 +54,31 @@ export const geminiTool = {
 	},
 };
 
+export const codexGeminiTool = {
+	name: "codex_gemini",
+	description:
+		"Start both Codex and Gemini in parallel for the same task. Returns both responses. Perfect for consensus or getting multiple perspectives on complex problems. IMPORTANT: Always pass your current working directory (pwd) as workDir.",
+	inputSchema: {
+		type: "object",
+		properties: {
+			message: {
+				type: "string",
+				description: "The question or analysis request (sent to both agents)",
+			},
+			workDir: {
+				type: "string",
+				description: "Working directory. Always pass your current pwd.",
+			},
+			gemini_model: {
+				type: "string",
+				enum: ["flash", "pro"],
+				description: "Gemini model. Default: pro",
+			},
+		},
+		required: ["message", "workDir"],
+	},
+};
+
 export const parallelSearchTool = {
 	name: "parallel_search",
 	description:
@@ -120,6 +145,105 @@ export async function handleGemini(args: {
 				text: `Error: ${result.error}`,
 			},
 		],
+	};
+}
+
+export async function handleCodexGemini(args: {
+	message: string;
+	workDir: string;
+	gemini_model?: "flash" | "pro";
+}): Promise<{ content: Array<{ type: string; text: string }> }> {
+	const geminiModel = args.gemini_model || "pro";
+
+	const startTime = Date.now();
+
+	// Codex ve Gemini'yi paralel başlat
+	const [codexResult, geminiResult] = await Promise.all([
+		// Codex (her zaman xhigh)
+		(async () => {
+			const sessionName = "agents_codex_xhigh";
+			const requestId = generateCodexRequestId();
+			const agentStart = Date.now();
+
+			try {
+				// Session yoksa oluştur
+				if (!(await hasSession(sessionName))) {
+					await createSession(sessionName, args.workDir, [
+						"codex",
+						"--dangerously-bypass-approvals-and-sandbox",
+						"-c",
+						'model_reasoning_effort="xhigh"',
+					]);
+					await waitForCodexReady(sessionName, 30000);
+				}
+
+				const fullPrompt = `[RQ-${requestId}] ${args.message}\n\nIMPORTANT: End your response with "[ANS-${requestId}]"`;
+				await sendBuffer(sessionName, fullPrompt);
+
+				const response = await waitForCodexResponse(
+					requestId,
+					3600000, // 60 min timeout
+					sessionName,
+				);
+
+				return {
+					success: true,
+					response,
+					duration: Date.now() - agentStart,
+				};
+			} catch (err) {
+				return {
+					success: false,
+					response: `Error: ${(err as Error).message}`,
+					duration: Date.now() - agentStart,
+				};
+			}
+		})(),
+
+		// Gemini
+		(async () => {
+			const config = getGeminiConfig(geminiModel);
+			const agentStart = Date.now();
+
+			try {
+				const result = await sendGeminiPrompt(
+					config,
+					args.workDir,
+					args.message,
+				);
+
+				return {
+					success: result.success,
+					response: result.response || result.error || "No response",
+					duration: Date.now() - agentStart,
+				};
+			} catch (err) {
+				return {
+					success: false,
+					response: `Error: ${(err as Error).message}`,
+					duration: Date.now() - agentStart,
+				};
+			}
+		})(),
+	]);
+
+	const totalDuration = Date.now() - startTime;
+
+	// Sonuçları formatla
+	const output = `## 🤖 Codex (xhigh) - ${Math.round(codexResult.duration / 1000)}s
+${codexResult.success ? "✅" : "❌"} ${codexResult.response}
+
+---
+
+## 💎 Gemini (${geminiModel}) - ${Math.round(geminiResult.duration / 1000)}s
+${geminiResult.success ? "✅" : "❌"} ${geminiResult.response}
+
+---
+
+📊 **Total: ${Math.round(totalDuration / 1000)}s (parallel)**`;
+
+	return {
+		content: [{ type: "text", text: output }],
 	};
 }
 

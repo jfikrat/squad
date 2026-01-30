@@ -14,14 +14,12 @@ import {
 } from "./core/tmux-manager";
 
 // Tool definitions
-import {
-	type ReasoningEffort,
-	codexTool,
-	handleCodex,
-} from "./tools/codex-tools";
+import { codexTool, handleCodex } from "./tools/codex-tools";
 import {
 	type GeminiModel,
+	codexGeminiTool,
 	geminiTool,
+	handleCodexGemini,
 	handleGemini,
 	handleParallelSearch,
 	parallelSearchTool,
@@ -53,6 +51,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 		tools: [
 			codexTool,
 			geminiTool,
+			codexGeminiTool,
 			parallelSearchTool,
 			pollEventsTool,
 			waitForEventTool,
@@ -67,17 +66,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 	switch (name) {
 		case "codex":
-			return handleCodex(
-				args as {
-					message: string;
-					workDir: string;
-					reasoning_effort?: ReasoningEffort;
-				},
-			);
+			return handleCodex(args as { message: string; workDir: string });
 
 		case "gemini":
 			return handleGemini(
 				args as { message: string; workDir: string; model?: GeminiModel },
+			);
+
+		case "codex_gemini":
+			return handleCodexGemini(
+				args as {
+					message: string;
+					workDir: string;
+					gemini_model?: "flash" | "pro";
+				},
 			);
 
 		case "parallel_search":

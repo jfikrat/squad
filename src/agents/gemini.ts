@@ -13,7 +13,6 @@ import {
 	killSession,
 	sendBuffer,
 	sendEscape,
-	sendKeys,
 } from "../core/tmux-manager";
 
 export interface GeminiResult {
@@ -100,16 +99,12 @@ export async function sendGeminiPrompt(
 		const marker = config.responseMarker || "◆END◆";
 		const fullPrompt = `[RQ-${requestId}] ${safePrompt}\n\nYanıtının sonuna "[ANS-${requestId}]" yaz.`;
 
-		// Shell mode'dan çık (Esc gönder) ve prompt gönder
+		// Shell mode'dan çık
 		await sendEscape(sessionName);
 		await Bun.sleep(100);
 
-		// Multiline kontrolü
-		if (fullPrompt.includes("\n")) {
-			await sendBuffer(sessionName, fullPrompt);
-		} else {
-			await sendKeys(sessionName, fullPrompt);
-		}
+		// Bracketed paste ile gönder (request ID sistemi her zaman multiline)
+		await sendBuffer(sessionName, fullPrompt);
 
 		// Response bekle (önce JSON, fallback tmux)
 		const response = await waitForResponse(

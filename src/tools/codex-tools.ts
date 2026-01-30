@@ -1,8 +1,5 @@
 import { sendCodexPrompt } from "../agents/codex";
-import type { AgentConfig } from "../config/agents";
 import { AGENTS } from "../config/agents";
-
-export type ReasoningEffort = "xhigh" | "high" | "medium" | "low";
 
 export const codexTool = {
 	name: "codex",
@@ -20,33 +17,22 @@ export const codexTool = {
 				description:
 					"Working directory for Codex to access project files. Always pass your current pwd.",
 			},
-			reasoning_effort: {
-				type: "string",
-				enum: ["xhigh", "high", "medium", "low"],
-				description:
-					"Reasoning effort level. xhigh for complex problems, medium for balanced analysis. Default: xhigh",
-			},
 		},
 		required: ["message", "workDir"],
 	},
 };
 
-function getCodexConfig(effort: ReasoningEffort): AgentConfig {
-	const base = AGENTS.codex;
-	return {
-		...base,
-		name: `codex_${effort}`,
-		command: [...base.command, "-c", `model_reasoning_effort="${effort}"`],
-	};
-}
-
 export async function handleCodex(args: {
 	message: string;
 	workDir: string;
-	reasoning_effort?: ReasoningEffort;
 }): Promise<{ content: Array<{ type: string; text: string }> }> {
-	const effort = args.reasoning_effort || "xhigh";
-	const config = getCodexConfig(effort);
+	// Her zaman xhigh kullan
+	const config = {
+		...AGENTS.codex,
+		name: "codex_xhigh",
+		command: [...AGENTS.codex.command, "-c", 'model_reasoning_effort="xhigh"'],
+	};
+
 	const result = await sendCodexPrompt(config, args.workDir, args.message);
 
 	if (result.success) {
