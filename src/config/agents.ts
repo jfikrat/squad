@@ -60,3 +60,17 @@ export const AGENTS: Record<string, AgentConfig> = {
 
 export const SESSION_TIMEOUT = 5 * 60 * 1000; // 5 dakika inaktivite
 export const MAX_PARALLEL_SEARCH = 5;
+
+// Terminal emülatör ayarı (env'den veya default)
+// Desteklenen: alacritty, urxvtc, kitty, wezterm, gnome-terminal, xterm
+export const TERMINAL_EMULATOR = process.env.SQUAD_TERMINAL || "alacritty";
+
+// Terminal komut argümanları (her terminal farklı)
+export const TERMINAL_EXEC_ARGS: Record<string, string[]> = {
+	alacritty: ["-e"],
+	urxvtc: ["-e"],
+	kitty: ["-e"],
+	wezterm: ["start", "--"],
+	"gnome-terminal": ["--"],
+	xterm: ["-e"],
+};

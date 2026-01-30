@@ -58,6 +58,19 @@ Agent ayarları `src/config/agents.ts` dosyasında:
 ## Bağımlılıklar
 
 - `tmux`: Session yönetimi (zorunlu)
-- `alacritty`: Görünür terminal (Gemini için)
+- Terminal emülatör: Görünür session için (varsayılan: alacritty)
 - `codex`: OpenAI Codex CLI
 - `gemini`: Google Gemini CLI
+
+## Ortam Değişkenleri
+
+| Değişken | Açıklama | Varsayılan |
+|----------|----------|------------|
+| `SQUAD_TERMINAL` | Terminal emülatör | `alacritty` |
+
+**Desteklenen terminaller:** alacritty, urxvtc, kitty, wezterm, gnome-terminal, xterm
+
+```bash
+# Örnek: urxvt daemon kullanımı (düşük RAM)
+export SQUAD_TERMINAL=urxvtc
+```

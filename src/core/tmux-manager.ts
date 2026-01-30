@@ -1,4 +1,5 @@
 import { $ } from "bun";
+import { TERMINAL_EMULATOR, TERMINAL_EXEC_ARGS } from "../config/agents";
 
 export interface TmuxSession {
 	name: string;
@@ -44,8 +45,9 @@ export async function createSession(
 
 	activeSessions.set(name, session);
 
-	// Alacritty ile session'a attach et (arka planda)
-	Bun.spawn(["alacritty", "-e", "tmux", "attach", "-t", name], {
+	// Terminal emülatör ile session'a attach et (arka planda)
+	const execArgs = TERMINAL_EXEC_ARGS[TERMINAL_EMULATOR] || ["-e"];
+	Bun.spawn([TERMINAL_EMULATOR, ...execArgs, "tmux", "attach", "-t", name], {
 		stdout: "ignore",
 		stderr: "ignore",
 	});
