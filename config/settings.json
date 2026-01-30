@@ -1,0 +1,10 @@
+{
+  "codex": {
+    "model": "gpt-5.2-codex",
+    "reasoning": "xhigh"
+  },
+  "gemini": {
+    "model": "gemini-3-flash-preview"
+  },
+  "terminal": "alacritty"
+}

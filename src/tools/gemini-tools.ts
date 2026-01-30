@@ -1,6 +1,11 @@
 import { sendGeminiPrompt } from "../agents/gemini";
 import type { AgentConfig } from "../config/agents";
-import { AGENTS } from "../config/agents";
+import {
+	AGENTS,
+	CODEX_MODEL,
+	CODEX_REASONING,
+	GEMINI_MODEL,
+} from "../config/agents";
 import {
 	findCodexResponseByRequestId,
 	generateCodexRequestId,
@@ -20,13 +25,6 @@ import {
 	sendBuffer,
 } from "../core/tmux-manager";
 
-export type GeminiModel = "flash" | "pro";
-
-const MODEL_MAP: Record<GeminiModel, string> = {
-	flash: "gemini-3-flash-preview",
-	pro: "gemini-3-pro-preview",
-};
-
 export const geminiTool = {
 	name: "gemini",
 	description:
@@ -45,9 +43,8 @@ export const geminiTool = {
 			},
 			model: {
 				type: "string",
-				enum: ["flash", "pro"],
 				description:
-					"Model to use. flash for speed, pro for complex analysis. Default: flash",
+					"Model to use (e.g., gemini-3-flash-preview, gemini-3-pro-preview). Default from settings.",
 			},
 		},
 		required: ["message", "workDir"],
@@ -103,16 +100,21 @@ export const parallelSearchTool = {
 	},
 };
 
-function getGeminiConfig(model: GeminiModel): AgentConfig {
+function getGeminiConfig(model: string): AgentConfig {
 	const base = AGENTS.gemini;
-	const modelId = MODEL_MAP[model];
+	// Model isminden kısa isim çıkar (gemini-3-flash-preview -> flash)
+	const shortName = model.includes("flash")
+		? "flash"
+		: model.includes("pro")
+			? "pro"
+			: model;
 	return {
 		...base,
-		name: `gemini_${model}`,
+		name: `gemini_${shortName}`,
 		command: [
 			...base.command.slice(0, 1),
 			"-m",
-			modelId,
+			model,
 			...base.command.slice(1),
 		],
 	};
@@ -121,9 +123,9 @@ function getGeminiConfig(model: GeminiModel): AgentConfig {
 export async function handleGemini(args: {
 	message: string;
 	workDir: string;
-	model?: GeminiModel;
+	model?: string;
 }): Promise<{ content: Array<{ type: string; text: string }> }> {
-	const model = args.model || "flash";
+	const model = args.model || GEMINI_MODEL;
 	const config = getGeminiConfig(model);
 	const result = await sendGeminiPrompt(config, args.workDir, args.message);
 
@@ -151,17 +153,17 @@ export async function handleGemini(args: {
 export async function handleCodexGemini(args: {
 	message: string;
 	workDir: string;
-	gemini_model?: "flash" | "pro";
+	gemini_model?: string;
 }): Promise<{ content: Array<{ type: string; text: string }> }> {
-	const geminiModel = args.gemini_model || "pro";
+	const geminiModel = args.gemini_model || GEMINI_MODEL;
 
 	const startTime = Date.now();
 
 	// Codex ve Gemini'yi paralel başlat
 	const [codexResult, geminiResult] = await Promise.all([
-		// Codex (her zaman xhigh)
+		// Codex (settings'den model ve reasoning)
 		(async () => {
-			const sessionName = "agents_codex_xhigh";
+			const sessionName = `agents_codex_${CODEX_REASONING}`;
 			const requestId = generateCodexRequestId();
 			const agentStart = Date.now();
 
@@ -171,8 +173,10 @@ export async function handleCodexGemini(args: {
 					await createSession(sessionName, args.workDir, [
 						"codex",
 						"--dangerously-bypass-approvals-and-sandbox",
+						"-m",
+						CODEX_MODEL,
 						"-c",
-						'model_reasoning_effort="xhigh"',
+						`model_reasoning_effort="${CODEX_REASONING}"`,
 					]);
 					await waitForCodexReady(sessionName, 30000);
 				}
@@ -230,7 +234,7 @@ export async function handleCodexGemini(args: {
 	const totalDuration = Date.now() - startTime;
 
 	// Sonuçları formatla
-	const output = `## 🤖 Codex (xhigh) - ${Math.round(codexResult.duration / 1000)}s
+	const output = `## 🤖 Codex (${CODEX_REASONING}) - ${Math.round(codexResult.duration / 1000)}s
 ${codexResult.success ? "✅" : "❌"} ${codexResult.response}
 
 ---

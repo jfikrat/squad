@@ -1,3 +1,27 @@
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+// Settings dosyasını oku (config/settings.json)
+interface Settings {
+	codex?: { model?: string; reasoning?: string };
+	gemini?: { model?: string };
+	terminal?: string;
+}
+
+function loadSettings(): Settings {
+	const settingsPath = resolve(__dirname, "../../config/settings.json");
+	if (existsSync(settingsPath)) {
+		try {
+			return JSON.parse(readFileSync(settingsPath, "utf-8"));
+		} catch {
+			return {};
+		}
+	}
+	return {};
+}
+
+const settings = loadSettings();
+
 export interface AgentConfig {
 	name: string;
 	command: string[];
@@ -33,9 +57,29 @@ export const AGENTS: Record<string, AgentConfig> = {
 export const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 dakika inaktivite
 export const MAX_PARALLEL_SEARCH = 5;
 
-// Terminal emülatör ayarı (env'den veya default)
+// Codex model ve reasoning effort
+// Öncelik: ENV > settings.json > default
+export const CODEX_MODEL =
+	process.env.SQUAD_CODEX_MODEL || settings.codex?.model || "gpt-5.2-codex";
+
+export type ReasoningEffort = "xhigh" | "high" | "medium" | "low";
+export const CODEX_REASONING: ReasoningEffort =
+	(process.env.SQUAD_CODEX_REASONING as ReasoningEffort) ||
+	(settings.codex?.reasoning as ReasoningEffort) ||
+	"xhigh";
+
+// Gemini model (tam isim)
+// Öncelik: ENV > settings.json > default
+export const GEMINI_MODEL =
+	process.env.SQUAD_GEMINI_MODEL ||
+	settings.gemini?.model ||
+	"gemini-3-flash-preview";
+
+// Terminal emülatör ayarı
+// Öncelik: ENV > settings.json > default
 // Desteklenen: alacritty, urxvtc, kitty, wezterm, gnome-terminal, xterm
-export const TERMINAL_EMULATOR = process.env.SQUAD_TERMINAL || "alacritty";
+export const TERMINAL_EMULATOR =
+	process.env.SQUAD_TERMINAL || settings.terminal || "alacritty";
 
 // Terminal komut argümanları (her terminal farklı)
 export const TERMINAL_EXEC_ARGS: Record<string, string[]> = {

@@ -1,10 +1,10 @@
 import { sendCodexPrompt } from "../agents/codex";
-import { AGENTS } from "../config/agents";
+import { AGENTS, CODEX_MODEL, CODEX_REASONING } from "../config/agents";
 
 export const codexTool = {
 	name: "codex",
 	description:
-		"GPT-5.2 Codex for deep technical analysis, architecture review, debugging, and code review. IMPORTANT: Always pass your current working directory (pwd) as workDir so Codex can access project files.",
+		"Codex for deep technical analysis, architecture review, debugging, and code review. IMPORTANT: Always pass your current working directory (pwd) as workDir so Codex can access project files.",
 	inputSchema: {
 		type: "object",
 		properties: {
@@ -26,11 +26,17 @@ export async function handleCodex(args: {
 	message: string;
 	workDir: string;
 }): Promise<{ content: Array<{ type: string; text: string }> }> {
-	// Her zaman xhigh kullan
+	// Model ve reasoning settings'den
 	const config = {
 		...AGENTS.codex,
-		name: "codex_xhigh",
-		command: [...AGENTS.codex.command, "-c", 'model_reasoning_effort="xhigh"'],
+		name: `codex_${CODEX_REASONING}`,
+		command: [
+			...AGENTS.codex.command,
+			"-m",
+			CODEX_MODEL,
+			"-c",
+			`model_reasoning_effort="${CODEX_REASONING}"`,
+		],
 	};
 
 	const result = await sendCodexPrompt(config, args.workDir, args.message);

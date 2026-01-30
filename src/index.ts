@@ -16,7 +16,6 @@ import {
 // Tool definitions
 import { codexTool, handleCodex } from "./tools/codex-tools";
 import {
-	type GeminiModel,
 	codexGeminiTool,
 	geminiTool,
 	handleCodexGemini,
@@ -70,7 +69,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 		case "gemini":
 			return handleGemini(
-				args as { message: string; workDir: string; model?: GeminiModel },
+				args as { message: string; workDir: string; model?: string },
 			);
 
 		case "codex_gemini":
@@ -78,7 +77,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 				args as {
 					message: string;
 					workDir: string;
-					gemini_model?: "flash" | "pro";
+					gemini_model?: string;
 				},
 			);
 
