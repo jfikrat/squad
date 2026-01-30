@@ -1,4 +1,4 @@
-# Agents MCP - Araştırma Dokümanları
+# Squad MCP - Araştırma Dokümanları
 
 **Tarih:** 2026-01-30
 **Amaç:** Claude Code için Gemini CLI ve Codex CLI entegrasyonu
@@ -14,13 +14,32 @@
 
 ---
 
+## Hızlı Başlangıç
+
+```bash
+# Klonla
+git clone https://github.com/jfikrat/squad.git
+cd squad
+
+# Bağımlılıkları yükle
+bun install
+
+# Terminal config (opsiyonel)
+cp .env.example .env
+# .env dosyasını düzenle: SQUAD_TERMINAL=alacritty
+
+# Başlat
+bun run start
+```
+
+---
+
 ## Özet Karşılaştırma
 
 ### Temel Farklar
 
 | Özellik | Gemini CLI | Codex CLI |
 |---------|------------|-----------|
-| **Kurulum** | `npm i -g @anthropic-ai/gemini-cli` | `npm i -g @openai/codex` |
 | **Interactive** | `gemini` | `codex` |
 | **Non-Interactive** | `gemini -p "prompt"` | `codex exec "prompt"` |
 | **JSON Output** | `-o json` (settings) | `--json` (JSONL) |
@@ -38,16 +57,6 @@
 **Sonuç:**
 - Gemini'de `Soru: ` prefix'i ŞART
 - Codex'te prefix gerekmez
-
-### tmux Kullanımı
-
-```bash
-# Her ikisi için ortak pattern
-tmux new-session -d -s SESSION -c /workdir
-tmux send-keys -t SESSION 'gemini' Enter  # veya 'codex'
-tmux send-keys -t SESSION 'prompt' Enter
-tmux capture-pane -t SESSION -p
-```
 
 ### Parse Stratejileri
 
@@ -71,32 +80,31 @@ const response = lastMsg.payload.message
 
 ---
 
-## Proposed Architecture
+## Mimari
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    MCP Server (agents-mcp)                   │
+│                    MCP Server (squad)                        │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
 │  │ gemini_flash │    │ gemini_pro   │    │ codex_medium │  │
-│  │ gemini_search│    │              │    │ codex_xhigh  │  │
+│  │ parallel_search   │              │    │ codex_xhigh  │  │
 │  └──────┬───────┘    └──────┬───────┘    └──────┬───────┘  │
 │         │                   │                   │           │
 │         ▼                   ▼                   ▼           │
 │  ┌─────────────────────────────────────────────────────┐   │
-│  │              Unified Agent Interface                 │   │
-│  │  - startSession(agent, workDir)                      │   │
-│  │  - sendPrompt(sessionId, prompt)                     │   │
-│  │  - waitForResponse(sessionId)                        │   │
-│  │  - getSessionHistory(sessionId)                      │   │
+│  │                 Agent Interface                      │   │
+│  │  - initSession(config, workDir)                      │   │
+│  │  - sendPrompt(config, workDir, prompt)               │   │
+│  │  - waitForResponse(requestId, timeout)               │   │
 │  └─────────────────────────────────────────────────────┘   │
 │                            │                                │
 │         ┌──────────────────┼──────────────────┐            │
 │         ▼                  ▼                  ▼            │
 │  ┌────────────┐    ┌────────────┐    ┌────────────┐       │
 │  │   tmux     │    │  Session   │    │  Response  │       │
-│  │  Manager   │    │  Watcher   │    │   Parser   │       │
+│  │  Manager   │    │  Parser    │    │  Cleaner   │       │
 │  └────────────┘    └────────────┘    └────────────┘       │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
@@ -106,29 +114,55 @@ const response = lastMsg.payload.message
 
 ## Implementation Checklist
 
-### Phase 1: Core Infrastructure
-- [ ] TypeScript proje yapısı (MCP SDK)
-- [ ] tmux session manager
-- [ ] Unified config (agents, models, workdirs)
+### Phase 1: Core Infrastructure ✅
+- [x] TypeScript proje yapısı (MCP SDK)
+- [x] tmux session manager
+- [x] Unified config (agents, models, workdirs)
+- [x] Terminal emülatör konfigürasyonu (SQUAD_TERMINAL)
 
-### Phase 2: Gemini Integration
-- [ ] Gemini session watcher
-- [ ] Gemini response parser (◆END◆ marker)
-- [ ] Safe prefix injection (`Soru: `)
-- [ ] Non-interactive mode fallback
+### Phase 2: Gemini Integration ✅
+- [x] Gemini session watcher
+- [x] Gemini response parser (◆END◆ marker)
+- [x] Safe prefix injection (`Soru: `)
+- [x] Request ID sistemi ([RQ-xxx] / [ANS-xxx])
 
-### Phase 3: Codex Integration
-- [ ] Codex session watcher (tarih bazlı)
-- [ ] Codex JSONL parser (agent_message)
-- [ ] Trust level handling
-- [ ] Reasoning effort config
+### Phase 3: Codex Integration ✅
+- [x] Codex session watcher (tarih bazlı)
+- [x] Codex JSONL parser (agent_message)
+- [x] Reasoning effort config (xhigh/medium)
 
 ### Phase 4: Advanced Features
-- [ ] Multi-turn conversation support
+- [x] Parallel agent execution (gemini_parallel_search)
+- [x] Error handling & timeouts
+- [x] Event sistemi (poll_events, wait_for_event)
+- [x] Agent status tracking
+- [ ] Multi-turn conversation (aynı session'da devam)
 - [ ] Session resume/fork
-- [ ] Parallel agent execution
-- [ ] Error handling & timeouts
 - [ ] MCP tool passthrough
+- [ ] Non-interactive mode fallback
+
+---
+
+## Ortam Değişkenleri
+
+| Değişken | Açıklama | Varsayılan |
+|----------|----------|------------|
+| `SQUAD_TERMINAL` | Terminal emülatör | `alacritty` |
+
+**Desteklenen terminaller:** alacritty, urxvtc, kitty, wezterm, gnome-terminal, xterm
+
+```bash
+# Örnek: urxvt daemon kullanımı (düşük RAM)
+export SQUAD_TERMINAL=urxvtc
+```
+
+### Terminal RAM Karşılaştırması (5 pencere)
+
+| Terminal | Total RAM |
+|----------|-----------|
+| urxvtd   | ~30 MB    |
+| Ghostty  | ~50 MB    |
+| Alacritty| ~250 MB   |
 
 ---
 
@@ -139,11 +173,11 @@ const response = lastMsg.payload.message
 - **Codex:** Session dosyası hemen oluşur
 
 ### 2. Response Detection
-- **Gemini:** `◆END◆` marker + `type: "gemini"` kontrolü
-- **Codex:** `type: "agent_message"` event kontrolü
+- **Gemini:** `◆END◆` marker + `[ANS-xxx]` kontrolü
+- **Codex:** `type: "agent_message"` + `[ANS-xxx]` kontrolü
 
 ### 3. Project Hash
-- **Gemini:** Bilinmeyen hash algoritması → watcher ile çöz
+- **Gemini:** SHA256(workDir) → session klasörü
 - **Codex:** Tarih bazlı dizin → direkt hesaplanabilir
 
 ### 4. MCP Support
@@ -158,7 +192,7 @@ const response = lastMsg.payload.message
 ```bash
 gemini                      # Interactive
 gemini -p "prompt"          # Non-interactive
-gemini -p "prompt" -o json  # JSON output (settings'te)
+gemini -m gemini-3-flash-preview  # Model seçimi
 ```
 
 ### Codex Commands
@@ -167,7 +201,6 @@ codex                       # Interactive
 codex exec "prompt"         # Non-interactive
 codex exec --json "prompt"  # JSONL output
 codex mcp-server            # MCP server mode
-codex resume --last         # Son session'ı devam ettir
 ```
 
 ### tmux Commands
@@ -179,23 +212,3 @@ tmux paste-buffer -t NAME -b BUF        # Yapıştır
 tmux capture-pane -t NAME -p            # Output al
 tmux kill-session -t NAME               # Session kapat
 ```
-
-### Terminal Emulator (X11)
-
-**urxvt daemon modu** - en verimli çoklu pencere çözümü:
-
-```bash
-# Daemon başlat (bir kez, login'de)
-urxvtd -q -o -f
-
-# Her agent için client penceresi (~2MB each)
-urxvtc -title "Gemini Flash" -e tmux attach -t gemini_flash
-urxvtc -title "Codex XHigh" -e tmux attach -t codex_xhigh
-```
-
-**RAM Karşılaştırması (5 pencere):**
-| Terminal | Total RAM |
-|----------|-----------|
-| urxvtd   | ~30 MB    |
-| Alacritty| ~250 MB   |
-| Ghostty  | ~50 MB    |
