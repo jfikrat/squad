@@ -7,7 +7,11 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 
 import { SESSION_TIMEOUT } from "./config/agents";
-import { cleanupInactiveSessions } from "./core/tmux-manager";
+import {
+	cleanupInactiveSessions,
+	getAllSessions,
+	killSession,
+} from "./core/tmux-manager";
 
 // Tool definitions
 import {
@@ -117,6 +121,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 setInterval(() => {
 	cleanupInactiveSessions(SESSION_TIMEOUT).catch(console.error);
 }, 60000);
+
+// Graceful shutdown - tüm tmux session'ları kapat
+async function cleanup() {
+	console.error("Shutting down, cleaning up tmux sessions...");
+	const sessions = getAllSessions();
+	for (const session of sessions) {
+		await killSession(session.name);
+	}
+	console.error(`Cleaned up ${sessions.length} session(s)`);
+	process.exit(0);
+}
+
+// SIGINT (Ctrl+C) ve SIGTERM handler
+process.on("SIGINT", cleanup);
+process.on("SIGTERM", cleanup);
 
 // Start server
 async function main() {

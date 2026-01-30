@@ -58,7 +58,7 @@ export const AGENTS: Record<string, AgentConfig> = {
 	},
 };
 
-export const SESSION_TIMEOUT = 5 * 60 * 1000; // 5 dakika inaktivite
+export const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 dakika inaktivite
 export const MAX_PARALLEL_SEARCH = 5;
 
 // Terminal emülatör ayarı (env'den veya default)
