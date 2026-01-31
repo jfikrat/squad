@@ -163,6 +163,13 @@ export function getSession(name: string): TmuxSession | undefined {
 	return activeSessions.get(name);
 }
 
+export function updateLastActivity(name: string): void {
+	const session = activeSessions.get(name);
+	if (session) {
+		session.lastActivity = new Date();
+	}
+}
+
 export function getAllSessions(): TmuxSession[] {
 	return Array.from(activeSessions.values());
 }

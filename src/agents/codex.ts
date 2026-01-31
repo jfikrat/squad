@@ -11,6 +11,7 @@ import {
 	hasSession,
 	killSession,
 	sendBuffer,
+	updateLastActivity,
 } from "../core/tmux-manager";
 
 export interface CodexResult {
@@ -99,6 +100,9 @@ export async function sendCodexPrompt(
 			config.timeout,
 			sessionName,
 		);
+
+		// Cevap alındı, lastActivity güncelle
+		updateLastActivity(sessionName);
 
 		// Event ekle
 		addEvent(config.name, {

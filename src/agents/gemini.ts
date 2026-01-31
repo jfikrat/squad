@@ -13,6 +13,7 @@ import {
 	killSession,
 	sendBuffer,
 	sendEscape,
+	updateLastActivity,
 } from "../core/tmux-manager";
 
 export interface GeminiResult {
@@ -114,6 +115,9 @@ export async function sendGeminiPrompt(
 			requestId,
 			workDir,
 		);
+
+		// Cevap alındı, lastActivity güncelle
+		updateLastActivity(sessionName);
 
 		// Event ekle
 		addEvent(config.name, {
