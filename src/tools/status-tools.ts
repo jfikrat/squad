@@ -4,7 +4,7 @@ import {
 	pollEvents as pollGeminiEvents,
 } from "../agents/gemini";
 import type { AgentConfig } from "../config/agents";
-import { AGENTS } from "../config/agents";
+import { AGENTS, CODEX_MODEL, GEMINI_MODEL } from "../config/agents";
 
 type AgentType =
 	| "codex_xhigh"
@@ -21,7 +21,35 @@ function getCodexConfig(agentName: string): AgentConfig | null {
 	return {
 		...base,
 		name: agentName,
-		command: [...base.command, "-c", `model_reasoning_effort="${effort}"`],
+		command: [
+			...base.command,
+			"-m",
+			CODEX_MODEL,
+			"-c",
+			`model_reasoning_effort="${effort}"`,
+		],
+	};
+}
+
+function getGeminiConfig(agentName: string): AgentConfig | null {
+	if (!agentName.startsWith("gemini_")) return null;
+	const modelType = agentName.replace("gemini_", "");
+	const modelId =
+		modelType === "flash"
+			? "gemini-3-flash-preview"
+			: modelType === "pro"
+				? "gemini-3-pro-preview"
+				: GEMINI_MODEL;
+	const base = AGENTS.gemini;
+	return {
+		...base,
+		name: agentName,
+		command: [
+			...base.command.slice(0, 1),
+			"-m",
+			modelId,
+			...base.command.slice(1),
+		],
 	};
 }
 
@@ -238,6 +266,8 @@ export async function handleGetAgentStatus(args: {
 
 	if (agent.startsWith("codex_")) {
 		config = getCodexConfig(agent);
+	} else if (agent.startsWith("gemini_")) {
+		config = getGeminiConfig(agent);
 	} else {
 		config = AGENTS[agent];
 	}
