@@ -115,8 +115,23 @@ src/
 - **tmux tabanlı**: Her agent ayrı tmux session'da çalışır
 - **Bracketed paste**: Multiline input için `tmux paste-buffer -p`
 - **Request ID sistemi**: `[RQ-xxx]` / `[ANS-xxx]` marker'ları ile yanıt eşleştirme
-- **60 dakika timeout**: Uzun analizler için yeterli süre
+- **60 dakika timeout**: Tek bir işlem için max bekleme süresi
+- **30 dakika inaktivite**: Kullanılmayan session'lar otomatik kapanır
 - **Auto-cleanup**: Terminal kapanınca tmux session da kapanır
+
+### Session Lifecycle
+
+```
+Input gönder → lastActivity güncellenir
+     ↓
+Agent düşünüyor (30+ dk olabilir)
+     ↓
+Cevap alındı → lastActivity güncellenir
+     ↓
+30 dk inaktivite → session otomatik kapatılır
+```
+
+`lastActivity` hem input hem output'ta güncellenir, böylece uzun süren işlemler cleanup'tan korunur.
 
 ## Lisans
 
