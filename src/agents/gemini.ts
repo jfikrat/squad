@@ -5,6 +5,7 @@ import {
 	getLatestSessionFile,
 	getSessionDir,
 } from "../core/gemini-session";
+import { getSessionName } from "../core/instance";
 import {
 	capturePane,
 	createSession,
@@ -35,7 +36,7 @@ export async function initGeminiSession(
 	config: AgentConfig,
 	workDir: string,
 ): Promise<string> {
-	const sessionName = `agents_${config.name}`;
+	const sessionName = getSessionName(config.name);
 
 	// Session zaten varsa kullan
 	if (await hasSession(sessionName)) {
@@ -80,7 +81,7 @@ export async function sendGeminiPrompt(
 	workDir: string,
 	prompt: string,
 ): Promise<GeminiResult> {
-	const sessionName = `agents_${config.name}`;
+	const sessionName = getSessionName(config.name);
 
 	try {
 		// Session yoksa oluştur
@@ -184,7 +185,7 @@ async function waitForResponse(
 }
 
 export async function stopGeminiSession(config: AgentConfig): Promise<void> {
-	const sessionName = `agents_${config.name}`;
+	const sessionName = getSessionName(config.name);
 	await killSession(sessionName);
 	pendingEvents.delete(config.name);
 }
@@ -210,7 +211,7 @@ export function getGeminiStatus(config: AgentConfig): {
 	lastActivity?: Date;
 	pendingEvents: number;
 } {
-	const sessionName = `agents_${config.name}`;
+	const sessionName = getSessionName(config.name);
 	const session = getSession(sessionName);
 
 	return {

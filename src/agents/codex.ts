@@ -4,6 +4,7 @@ import {
 	generateCodexRequestId,
 	getLatestCodexSessionFile,
 } from "../core/codex-session";
+import { getSessionName } from "../core/instance";
 import {
 	capturePane,
 	createSession,
@@ -33,7 +34,7 @@ export async function initCodexSession(
 	config: AgentConfig,
 	workDir: string,
 ): Promise<string> {
-	const sessionName = `agents_${config.name}`;
+	const sessionName = getSessionName(config.name);
 
 	// Session zaten varsa kullan
 	if (await hasSession(sessionName)) {
@@ -77,7 +78,7 @@ export async function sendCodexPrompt(
 	workDir: string,
 	prompt: string,
 ): Promise<CodexResult> {
-	const sessionName = `agents_${config.name}`;
+	const sessionName = getSessionName(config.name);
 
 	try {
 		// Session yoksa oluştur
@@ -166,7 +167,7 @@ async function waitForCodexResponse(
 }
 
 export async function stopCodexSession(config: AgentConfig): Promise<void> {
-	const sessionName = `agents_${config.name}`;
+	const sessionName = getSessionName(config.name);
 	await killSession(sessionName);
 	pendingEvents.delete(config.name);
 }
@@ -192,7 +193,7 @@ export function getCodexStatus(config: AgentConfig): {
 	lastActivity?: Date;
 	pendingEvents: number;
 } {
-	const sessionName = `agents_${config.name}`;
+	const sessionName = getSessionName(config.name);
 	const session = getSession(sessionName);
 
 	return {

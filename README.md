@@ -97,6 +97,7 @@ src/
 │   └── agents.ts         # Agent konfigürasyonları
 ├── core/
 │   ├── tmux-manager.ts   # tmux session yönetimi
+│   ├── instance.ts       # MCP instance ID (session isolation)
 │   ├── codex-session.ts  # Codex JSONL session okuma
 │   ├── gemini-session.ts # Gemini JSON session okuma
 │   ├── response-parser.ts # Yanıt temizleme
@@ -113,6 +114,7 @@ src/
 ## Mimari
 
 - **tmux tabanlı**: Her agent ayrı tmux session'da çalışır
+- **Instance isolation**: Her MCP instance unique ID alır, session'lar çakışmaz
 - **Bracketed paste**: Multiline input için `tmux paste-buffer -p`
 - **Request ID sistemi**: `[RQ-xxx]` / `[ANS-xxx]` marker'ları ile yanıt eşleştirme
 - **60 dakika timeout**: Tek bir işlem için max bekleme süresi

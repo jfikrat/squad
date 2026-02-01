@@ -17,6 +17,7 @@ import {
 	getLatestSessionFile,
 	getSessionDir,
 } from "../core/gemini-session";
+import { getSessionName } from "../core/instance";
 import {
 	capturePane,
 	createSession,
@@ -163,7 +164,7 @@ export async function handleCodexGemini(args: {
 	const [codexResult, geminiResult] = await Promise.all([
 		// Codex (settings'den model ve reasoning)
 		(async () => {
-			const sessionName = `agents_codex_${CODEX_REASONING}`;
+			const sessionName = getSessionName(`codex_${CODEX_REASONING}`);
 			const requestId = generateCodexRequestId();
 			const agentStart = Date.now();
 
@@ -265,7 +266,7 @@ export async function handleParallelSearch(args: {
 
 	// Gemini session'ları
 	const geminiPromises = geminiQueries.map(async (query, index) => {
-		const sessionName = `agents_parallel_gemini_${index}`;
+		const sessionName = getSessionName(`parallel_gemini_${index}`);
 		const requestId = generateRequestId();
 
 		try {
@@ -301,7 +302,7 @@ export async function handleParallelSearch(args: {
 
 	// Codex session'ları
 	const codexPromises = codexQueries.map(async (query, index) => {
-		const sessionName = `agents_parallel_codex_${index}`;
+		const sessionName = getSessionName(`parallel_codex_${index}`);
 		const requestId = generateCodexRequestId();
 
 		try {

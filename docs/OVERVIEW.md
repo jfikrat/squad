@@ -143,7 +143,9 @@ Claude: "Bu race condition'ı bulamıyorum"
 
 ### Session Management
 - Her agent kendi tmux session'ında çalışır
-- Session isimleri: `agents_codex_xhigh`, `agents_gemini_flash`, vb.
+- Her MCP instance unique 4-karakterlik ID alır (örn: `a7x2`)
+- Session isimleri: `agents_{instanceId}_{agent}` (örn: `agents_a7x2_codex_xhigh`)
+- Bu sayede farklı Claude Code instance'ları birbirinin session'larına karışmaz
 - 60 dakika timeout (uzun analizler için)
 - Terminal kapatılırsa session da kapanır
 
@@ -162,7 +164,6 @@ Claude: "Bu race condition'ı bulamıyorum"
 1. **Local only**: Agent CLI'ları local'de kurulu olmalı
 2. **Terminal gerekli**: Görünür tmux session için terminal lazım
 3. **API anahtarları**: Codex ve Gemini için auth gerekli
-4. **Tek kullanıcı**: Concurrent kullanım test edilmedi
 
 ## Gelecek Planlar
 
