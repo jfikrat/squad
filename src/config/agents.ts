@@ -60,7 +60,7 @@ export const MAX_PARALLEL_SEARCH = 5;
 // Codex model ve reasoning effort
 // Öncelik: ENV > settings.json > default
 export const CODEX_MODEL =
-	process.env.SQUAD_CODEX_MODEL || settings.codex?.model || "gpt-5.2-codex";
+	process.env.SQUAD_CODEX_MODEL || settings.codex?.model || "gpt-5.3-codex";
 
 export type ReasoningEffort = "xhigh" | "high" | "medium" | "low";
 export const CODEX_REASONING: ReasoningEffort =

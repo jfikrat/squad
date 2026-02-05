@@ -1,6 +1,6 @@
 {
   "codex": {
-    "model": "gpt-5.2-codex",
+    "model": "gpt-5.3-codex",
     "reasoning": "xhigh"
   },
   "gemini": {
