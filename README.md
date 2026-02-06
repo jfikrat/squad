@@ -1,46 +1,53 @@
 # Squad MCP Server
 
-Multi-agent MCP server - Codex ve Gemini entegrasyonu.
+**Multi-agent orchestration for Claude Code** — dispatch tasks to Codex and Gemini simultaneously.
 
-## Kurulum
+![Squad MCP Banner](assets/banner.jpg)
+
+One prompt. Multiple AI perspectives. All in your terminal.
+
+## Features
+
+- **Parallel execution** — Run Codex (GPT-5.3) and Gemini 3 in parallel via MCP tools
+- **tmux-based** — Each agent runs in its own tmux session, visible in real-time
+- **Pane layout** — Agents auto-arrange as tmux panes alongside Claude Code
+- **Instance isolation** — Multiple Claude Code sessions don't interfere with each other
+- **Configurable** — Choose models, reasoning levels, display modes via `config/settings.json`
+
+## Quick Start
 
 ```bash
-# Bağımlılıkları yükle
+# Install dependencies
 bun install
 
-# Claude Code'a ekle
+# Add to Claude Code
 claude mcp add -s user squad -- bun run /path/to/squad/src/index.ts
 ```
 
-## Gereksinimler
+## Requirements
 
-- [Bun](https://bun.sh/) - JavaScript runtime
-- [tmux](https://github.com/tmux/tmux) - Terminal multiplexer
-- [Codex CLI](https://github.com/openai/codex) - OpenAI Codex
-- [Gemini CLI](https://github.com/google/gemini-cli) - Google Gemini
-- Terminal emülatör (alacritty, kitty, wezterm, vb.) - `display: "terminal"` modu için
+- [Bun](https://bun.sh/) — JavaScript runtime
+- [tmux](https://github.com/tmux/tmux) — Terminal multiplexer
+- [Codex CLI](https://github.com/openai/codex) — OpenAI Codex
+- [Gemini CLI](https://github.com/google/gemini-cli) — Google Gemini
+- Terminal emulator (alacritty, kitty, wezterm, etc.) — for `display: "terminal"` mode
 
 ## Tools
 
-| Tool | Parametreler | Açıklama |
-|------|--------------|----------|
-| `codex` | `message`, `workDir` | Codex (model + reasoning: settings) |
-| `gemini` | `message`, `workDir`, `model?` | Gemini (model: settings veya parametre) |
-| `codex_gemini` | `message`, `workDir`, `gemini_model?` | Codex + Gemini paralel (consensus için) |
-| `parallel_search` | `queries`, `workDir` | Gemini + Codex paralel arama (max 4 query) |
-| `cleanup` | - | Bu instance'a ait tüm agent session'larını kapat |
-| `poll_events` | `agent`, `peek?` | Agent event'lerini poll et |
-| `wait_for_event` | `agent`, `eventType`, `timeoutMs?` | Belirli bir event bekle |
-| `get_agent_status` | `agent` | Agent durumunu sorgula |
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `codex` | `message`, `workDir` | Single Codex call (model + reasoning from settings) |
+| `gemini` | `message`, `workDir`, `model?` | Single Gemini call (model from settings or parameter) |
+| `codex_gemini` | `message`, `workDir`, `gemini_model?` | Parallel Codex + Gemini (consensus / dual perspective) |
+| `parallel_search` | `queries`, `workDir` | 4 agents (2 Gemini + 2 Codex) researching different queries |
+| `cleanup` | — | Kill all agent sessions owned by this instance |
+| `poll_events` | `agent`, `peek?` | Poll pending events from an agent |
+| `wait_for_event` | `agent`, `eventType`, `timeoutMs?` | Block until a specific event arrives |
+| `get_agent_status` | `agent` | Query agent connection state and activity |
 
-## Konfigürasyon
+## Configuration
 
-Ayarları değiştirmek için `config/settings.json` dosyasını düzenleyin:
-
-```bash
-nano config/settings.json   # veya
-code config/settings.json   # VS Code ile
-```
+Edit `config/settings.json` to customize:
 
 ```json
 {
@@ -56,116 +63,98 @@ code config/settings.json   # VS Code ile
 }
 ```
 
-**Değişiklik sonrası MCP server'ı yeniden başlatın:**
-```bash
-# Claude Code'da:
+After changes, reconnect the MCP server in Claude Code:
+```
 /mcp
-# "Reconnected to squad" mesajını görmelisiniz
 ```
 
-### Kullanılabilir Değerler
+### Available Values
 
-| Ayar | Değerler | Açıklama |
-|------|----------|----------|
-| `codex.model` | `gpt-5.3-codex`, `gpt-5.2` | Codex modeli |
-| `codex.reasoning` | `xhigh`, `high`, `medium`, `low` | Akıl yürütme seviyesi |
-| `gemini.model` | `gemini-3-flash-preview`, `gemini-3-pro-preview` | Gemini modeli |
-| `terminal` | `alacritty`, `kitty`, `wezterm`, ... | Terminal emülatör |
-| `display` | `pane`, `terminal`, `none` | Agent görüntüleme modu |
+| Setting | Values | Description |
+|---------|--------|-------------|
+| `codex.model` | `gpt-5.3-codex`, `gpt-5.2` | Codex model |
+| `codex.reasoning` | `xhigh`, `high`, `medium`, `low` | Reasoning effort level |
+| `gemini.model` | `gemini-3-flash-preview`, `gemini-3-pro-preview` | Gemini model |
+| `terminal` | `alacritty`, `kitty`, `wezterm`, ... | Terminal emulator |
+| `display` | `pane`, `terminal`, `none` | Agent display mode |
 
-### Display Modları
+### Display Modes
 
-| Mod | Açıklama |
-|-----|----------|
-| `terminal` | Her agent için yeni terminal penceresi açar (default) |
-| `pane` | Agent'ları mevcut tmux session'da pane olarak açar (auto-grid) |
-| `none` | Görsel UI açmaz, agent'lar arka planda çalışır |
+| Mode | Description |
+|------|-------------|
+| `terminal` | Opens a new terminal window for each agent (default) |
+| `pane` | Opens agents as tmux panes in the current session (auto-grid) |
+| `none` | No visual UI — agents run in the background |
 
-**Pane modu** tmux içinde Claude Code çalıştırırken idealdir. Agent'lar otomatik ızgara layout ile düzenlenir:
+**Pane mode** is ideal when running Claude Code inside tmux. Agents auto-arrange in a grid layout:
 
 ```
-2 agent:                          3+ agent:
-┌──────────┬───────────┐          ┌──────────┬─────┬─────┐
-│          │  Codex    │          │          │ A1  │ A2  │
-│  Claude  ├───────────┤          │  Claude  ├─────┼─────┤
-│  Code    │  Gemini   │          │  Code    │ A3  │ A4  │
-│  (40%)   │  (60%)    │          │  (40%)   │   (60%)   │
-└──────────┴───────────┘          └──────────┴───────────┘
+2 agents:                        3+ agents:
+┌──────────┬───────────┐         ┌──────────┬─────┬─────┐
+│          │  Codex    │         │          │ A1  │ A2  │
+│  Claude  ├───────────┤         │  Claude  ├─────┼─────┤
+│  Code    │  Gemini   │         │  Code    │ A3  │ A4  │
+│  (40%)   │  (60%)    │         │  (40%)   │   (60%)   │
+└──────────┴───────────┘         └──────────┴───────────┘
 ```
 
-İlk agent CC'nin sağına %60 ile açılır, sonraki agent'lar en büyük pane'i aspect ratio'ya göre otomatik böler.
+### Environment Variables (optional override)
 
-### Ortam Değişkenleri (opsiyonel override)
+Priority: ENV > settings.json > default
 
-Öncelik: ENV > settings.json > default
-
-| Değişken | Açıklama |
-|----------|----------|
+| Variable | Description |
+|----------|-------------|
 | `SQUAD_CODEX_MODEL` | Codex model |
 | `SQUAD_CODEX_REASONING` | Codex reasoning effort |
 | `SQUAD_GEMINI_MODEL` | Gemini model |
-| `SQUAD_TERMINAL` | Terminal emülatör |
-| `SQUAD_DISPLAY` | Display modu (`pane`, `terminal`, `none`) |
+| `SQUAD_TERMINAL` | Terminal emulator |
+| `SQUAD_DISPLAY` | Display mode (`pane`, `terminal`, `none`) |
 
-## Geliştirme
-
-```bash
-bun run start              # MCP sunucuyu başlat
-bun run build && bun run lint  # Build ve lint
-```
-
-## Proje Yapısı
+## Architecture
 
 ```
 config/
-└── settings.json         # Kullanıcı ayarları (model, reasoning, terminal, display)
+└── settings.json           # User settings (model, reasoning, terminal, display)
 
 src/
-├── index.ts              # MCP sunucu entry point
+├── index.ts                # MCP server entry point
 ├── config/
-│   └── agents.ts         # Agent konfigürasyonları + display mode
+│   └── agents.ts           # Agent configurations + display mode
 ├── core/
-│   ├── tmux-manager.ts   # tmux session yönetimi + pane grid layout
-│   ├── instance.ts       # MCP instance ID (session isolation)
-│   ├── codex-session.ts  # Codex JSONL session okuma
-│   ├── gemini-session.ts # Gemini JSON session okuma
-│   ├── response-parser.ts # Yanıt temizleme
-│   └── session-watcher.ts # Dosya izleme utilities
+│   ├── tmux-manager.ts     # tmux session management + pane grid layout
+│   ├── instance.ts         # MCP instance ID (session isolation)
+│   ├── codex-session.ts    # Codex JSONL session reader
+│   ├── gemini-session.ts   # Gemini JSON session reader
+│   ├── response-parser.ts  # Response cleanup
+│   └── session-watcher.ts  # File watching utilities
 ├── agents/
-│   ├── codex.ts          # Codex agent
-│   └── gemini.ts         # Gemini agent
+│   ├── codex.ts            # Codex agent
+│   └── gemini.ts           # Gemini agent
 └── tools/
-    ├── codex-tools.ts    # Codex tool
-    ├── gemini-tools.ts   # Gemini + parallel_search tools
-    └── status-tools.ts   # poll_events, wait_for_event, get_agent_status, cleanup
+    ├── codex-tools.ts      # Codex tool
+    ├── gemini-tools.ts     # Gemini + parallel_search tools
+    └── status-tools.ts     # poll_events, wait_for_event, get_agent_status, cleanup
 ```
 
-## Mimari
+### Key Design Decisions
 
-- **tmux tabanlı**: Her agent ayrı tmux session'da çalışır
-- **Instance isolation**: Her MCP instance unique ID alır, session'lar çakışmaz
-- **Pane grid layout**: `display: "pane"` modunda agent'lar otomatik ızgara düzeninde açılır
-- **Read-only agent'lar**: Codex prompt'larına dosya değiştirme yasağı eklenir
-- **Bracketed paste**: Multiline input için `tmux paste-buffer -p`
-- **Request ID sistemi**: `[RQ-xxx]` / `[ANS-xxx]` marker'ları ile yanıt eşleştirme
-- **60 dakika timeout**: Tek bir işlem için max bekleme süresi
-- **30 dakika inaktivite**: Kullanılmayan session'lar otomatik kapanır
-- **Instance-scoped cleanup**: `cleanup` tool'u sadece kendi instance session'larını kapatır
+- **tmux-based**: Each agent runs in a separate tmux session
+- **Instance isolation**: Each MCP instance gets a unique ID — sessions never collide
+- **Pane grid layout**: In `display: "pane"` mode, agents auto-arrange in a grid
+- **Read-only agents**: Codex prompts include file modification restrictions
+- **Bracketed paste**: Multiline input via `tmux paste-buffer -p`
+- **Request ID system**: `[RQ-xxx]` / `[ANS-xxx]` markers for response matching
+- **60 min timeout**: Maximum wait time per operation
+- **30 min inactivity**: Unused sessions are automatically cleaned up
+- **Instance-scoped cleanup**: `cleanup` only kills sessions owned by this instance
 
-### Session Lifecycle
+## Development
 
-```
-Input gönder → lastActivity güncellenir
-     ↓
-Agent düşünüyor (30+ dk olabilir)
-     ↓
-Cevap alındı → lastActivity güncellenir
-     ↓
-30 dk inaktivite → session otomatik kapatılır
+```bash
+bun run start                  # Start MCP server
+bun run build && bun run lint  # Build and lint
 ```
 
-`lastActivity` hem input hem output'ta güncellenir, böylece uzun süren işlemler cleanup'tan korunur.
-
-## Lisans
+## License
 
 MIT
