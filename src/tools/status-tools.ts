@@ -5,6 +5,8 @@ import {
 } from "../agents/gemini";
 import type { AgentConfig } from "../config/agents";
 import { AGENTS, CODEX_MODEL, GEMINI_MODEL } from "../config/agents";
+import { INSTANCE_ID } from "../core/instance";
+import { getAllSessions, killSession } from "../core/tmux-manager";
 
 type AgentType =
 	| "codex_xhigh"
@@ -116,6 +118,16 @@ export const waitForEventTool = {
 			},
 		},
 		required: ["agent", "eventType"],
+	},
+};
+
+export const cleanupTool = {
+	name: "cleanup",
+	description:
+		"Kill all agent sessions belonging to this instance. Safe to use - only kills sessions owned by this MCP server, never touches other instances' sessions.",
+	inputSchema: {
+		type: "object",
+		properties: {},
 	},
 };
 
@@ -316,6 +328,27 @@ export async function handleGetAgentStatus(args: {
 					null,
 					2,
 				),
+			},
+		],
+	};
+}
+
+export async function handleCleanup(): Promise<{
+	content: Array<{ type: string; text: string }>;
+}> {
+	const sessions = getAllSessions();
+	const killed: string[] = [];
+
+	for (const session of sessions) {
+		await killSession(session.name);
+		killed.push(session.name);
+	}
+
+	return {
+		content: [
+			{
+				type: "text",
+				text: `Cleaned up ${killed.length} session(s) for instance ${INSTANCE_ID}:\n${killed.length > 0 ? killed.map((s) => `  - ${s}`).join("\n") : "  (no active sessions)"}`,
 			},
 		],
 	};

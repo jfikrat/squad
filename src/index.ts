@@ -24,7 +24,9 @@ import {
 	parallelSearchTool,
 } from "./tools/gemini-tools";
 import {
+	cleanupTool,
 	getAgentStatusTool,
+	handleCleanup,
 	handleGetAgentStatus,
 	handlePollEvents,
 	handleWaitForEvent,
@@ -55,6 +57,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 			pollEventsTool,
 			waitForEventTool,
 			getAgentStatusTool,
+			cleanupTool,
 		],
 	};
 });
@@ -128,6 +131,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 						| "gemini_pro";
 				},
 			);
+
+		case "cleanup":
+			return handleCleanup();
 
 		default:
 			throw new Error(`Unknown tool: ${name}`);
