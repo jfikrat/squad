@@ -6,6 +6,7 @@ interface Settings {
 	codex?: { model?: string; reasoning?: string };
 	gemini?: { model?: string };
 	terminal?: string;
+	display?: string;
 }
 
 function loadSettings(): Settings {
@@ -90,3 +91,13 @@ export const TERMINAL_EXEC_ARGS: Record<string, string[]> = {
 	"gnome-terminal": ["--"],
 	xterm: ["-e"],
 };
+
+// Display modu: agent session'larının nasıl gösterileceği
+// "terminal" = yeni terminal penceresi aç (default)
+// "pane" = mevcut tmux session'da pane olarak aç
+// "none" = görsel UI açma, sadece session oluştur
+export type DisplayMode = "terminal" | "pane" | "none";
+export const DISPLAY_MODE: DisplayMode =
+	(process.env.SQUAD_DISPLAY as DisplayMode) ||
+	(settings.display as DisplayMode) ||
+	"terminal";

@@ -1,5 +1,9 @@
 import { $ } from "bun";
-import { TERMINAL_EMULATOR, TERMINAL_EXEC_ARGS } from "../config/agents";
+import {
+	DISPLAY_MODE,
+	TERMINAL_EMULATOR,
+	TERMINAL_EXEC_ARGS,
+} from "../config/agents";
 
 export interface TmuxSession {
 	name: string;
@@ -45,14 +49,58 @@ export async function createSession(
 
 	activeSessions.set(name, session);
 
-	// Terminal emülatör ile session'a attach et (arka planda)
-	// Terminal kapandığında session'ı da öldür (trap ile SIGHUP/EXIT yakala)
-	const execArgs = TERMINAL_EXEC_ARGS[TERMINAL_EMULATOR] || ["-e"];
-	const attachCmd = `trap 'tmux kill-session -t ${name} 2>/dev/null' EXIT; tmux attach -t ${name}`;
-	Bun.spawn([TERMINAL_EMULATOR, ...execArgs, "sh", "-c", attachCmd], {
-		stdout: "ignore",
-		stderr: "ignore",
-	});
+	// Agent session'ını görsel olarak aç (display mode'a göre)
+	if (DISPLAY_MODE === "pane") {
+		// Mevcut tmux session'da pane olarak aç (ızgara layout)
+		// TMUX env var unset edilmeli - nested tmux attach için gerekli
+		// Trap yok: session lifecycle squad tarafından yönetilir (timeout + killSession)
+		const paneAttachCmd = `TMUX='' exec tmux attach -t ${name}`;
+		try {
+			const paneListResult =
+				await $`tmux list-panes -F '#{pane_index} #{pane_width} #{pane_height}'`.quiet();
+			const panes = paneListResult.stdout
+				.toString()
+				.trim()
+				.split("\n")
+				.map((line) => {
+					const [index, width, height] = line.trim().split(" ").map(Number);
+					return { index, width, height, area: width * height };
+				});
+
+			if (panes.length <= 1) {
+				// Sadece CC var, sağa %60 ile ilk agent pane'ini aç
+				await $`tmux split-window -h -l 60% sh -c ${paneAttachCmd}`.quiet();
+			} else {
+				// Agent pane'leri arasından en büyük alanı olanı bul (pane 0 = CC, hariç tut)
+				const agentPanes = panes.filter((p) => p.index > 0);
+				const targetPane = agentPanes.reduce(
+					(max, p) => (p.area > max.area ? p : max),
+					agentPanes[0],
+				);
+				// Karakter aspect ratio (~2.5:1): width > height*2.5 ise yatay, değilse dikey böl
+				const splitFlag =
+					targetPane.width > targetPane.height * 2.5 ? "-h" : "-v";
+				await $`tmux split-window ${splitFlag} -t ${targetPane.index} sh -c ${paneAttachCmd}`.quiet();
+			}
+		} catch {
+			// tmux içinde değilsek fallback: terminal aç
+			const attachCmd = `trap 'tmux kill-session -t ${name} 2>/dev/null' EXIT; tmux attach -t ${name}`;
+			const execArgs = TERMINAL_EXEC_ARGS[TERMINAL_EMULATOR] || ["-e"];
+			Bun.spawn([TERMINAL_EMULATOR, ...execArgs, "sh", "-c", attachCmd], {
+				stdout: "ignore",
+				stderr: "ignore",
+			});
+		}
+	} else if (DISPLAY_MODE === "terminal") {
+		// Yeni terminal penceresi aç (eski davranış)
+		const attachCmd = `trap 'tmux kill-session -t ${name} 2>/dev/null' EXIT; tmux attach -t ${name}`;
+		const execArgs = TERMINAL_EXEC_ARGS[TERMINAL_EMULATOR] || ["-e"];
+		Bun.spawn([TERMINAL_EMULATOR, ...execArgs, "sh", "-c", attachCmd], {
+			stdout: "ignore",
+			stderr: "ignore",
+		});
+	}
+	// "none" modunda hiçbir görsel UI açılmaz
 
 	return session;
 }
