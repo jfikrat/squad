@@ -182,7 +182,7 @@ export async function handleCodexGemini(args: {
 					await waitForCodexReady(sessionName, 30000);
 				}
 
-				const fullPrompt = `[RQ-${requestId}] ${args.message}\n\nIMPORTANT: End your response with "[ANS-${requestId}]"`;
+				const fullPrompt = `[RQ-${requestId}] ${args.message}\n\nIMPORTANT: Do NOT create, modify, or delete any files. Only analyze and respond.\nIMPORTANT: End your response with "[ANS-${requestId}]"`;
 				await sendBuffer(sessionName, fullPrompt);
 
 				const response = await waitForCodexResponse(
@@ -315,7 +315,7 @@ export async function handleParallelSearch(args: {
 
 			await waitForCodexReady(sessionName, 30000);
 
-			const fullPrompt = `[RQ-${requestId}] ${query}\n\nIMPORTANT: End your response with "[ANS-${requestId}]"`;
+			const fullPrompt = `[RQ-${requestId}] ${query}\n\nIMPORTANT: Do NOT create, modify, or delete any files. Only analyze and respond.\nIMPORTANT: End your response with "[ANS-${requestId}]"`;
 			await sendBuffer(sessionName, fullPrompt);
 
 			const response = await waitForCodexResponse(

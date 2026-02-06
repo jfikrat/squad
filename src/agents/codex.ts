@@ -90,7 +90,7 @@ export async function sendCodexPrompt(
 		const requestId = generateCodexRequestId();
 
 		// Prompt'a request ID ve ANS talimatı ekle
-		const fullPrompt = `[RQ-${requestId}] ${prompt}\n\nIMPORTANT: End your response with "[ANS-${requestId}]"`;
+		const fullPrompt = `[RQ-${requestId}] ${prompt}\n\nIMPORTANT: Do NOT create, modify, or delete any files. Only analyze and respond.\nIMPORTANT: End your response with "[ANS-${requestId}]"`;
 
 		// Prompt gönder (her zaman buffer kullan - daha güvenilir)
 		await sendBuffer(sessionName, fullPrompt);
