@@ -187,6 +187,49 @@ export async function sendBuffer(session: string, text: string): Promise<void> {
 	}
 }
 
+/**
+ * Chunked send-keys ile metin gönder (paste detection bypass)
+ * Claude Code gibi TUI'lar büyük paste'leri algılayıp [Pasted text #N] moduna girer
+ * ve Enter submit yerine newline ekler. Küçük chunk'lar (50 char) halinde
+ * send-keys -l kullanarak "hızlı typing" simüle ederiz.
+ */
+export async function sendBufferNoBracket(
+	session: string,
+	text: string,
+): Promise<void> {
+	if (!(await hasSession(session))) {
+		throw new Error(`Session ${session} not found`);
+	}
+
+	// Chunk boyutu: 50 karakter — paste detection eşiğinin altında
+	const CHUNK_SIZE = 50;
+	const CHUNK_DELAY = 10; // ms arası bekleme
+
+	for (let i = 0; i < text.length; i += CHUNK_SIZE) {
+		const chunk = text.slice(i, i + CHUNK_SIZE);
+		const result = await $`tmux send-keys -t ${session} -l -- ${chunk}`.nothrow();
+		if (result.exitCode !== 0) {
+			throw new Error(`Failed to send chunk at offset ${i}: ${result.stderr}`);
+		}
+		if (i + CHUNK_SIZE < text.length) {
+			await Bun.sleep(CHUNK_DELAY);
+		}
+	}
+
+	await Bun.sleep(100);
+
+	// Enter gönder (submit)
+	const enterResult = await $`tmux send-keys -t ${session} Enter`.nothrow();
+	if (enterResult.exitCode !== 0) {
+		throw new Error(`Failed to send Enter: ${enterResult.stderr}`);
+	}
+
+	const s = activeSessions.get(session);
+	if (s) {
+		s.lastActivity = new Date();
+	}
+}
+
 export async function capturePane(
 	session: string,
 	lines = 1000,

@@ -14,6 +14,7 @@ import {
 } from "./core/tmux-manager";
 
 // Tool definitions
+import { claudeTool, handleClaude } from "./tools/claude-tools";
 import { codexTool, handleCodex } from "./tools/codex-tools";
 import {
 	codexGeminiTool,
@@ -52,6 +53,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 		tools: [
 			codexTool,
 			geminiTool,
+			claudeTool,
 			codexGeminiTool,
 			parallelSearchTool,
 			pollEventsTool,
@@ -69,6 +71,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 	switch (name) {
 		case "codex":
 			return handleCodex(args as { message: string; workDir: string });
+
+		case "claude":
+			return handleClaude(args as { message: string; workDir: string });
 
 		case "gemini":
 			return handleGemini(
@@ -98,7 +103,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 						| "codex_medium"
 						| "codex_low"
 						| "gemini_flash"
-						| "gemini_pro";
+						| "gemini_pro"
+						| "claude_sonnet"
+						| "claude_opus"
+						| "claude_haiku";
 					peek?: boolean;
 				},
 			);
@@ -112,7 +120,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 						| "codex_medium"
 						| "codex_low"
 						| "gemini_flash"
-						| "gemini_pro";
+						| "gemini_pro"
+						| "claude_sonnet"
+						| "claude_opus"
+						| "claude_haiku";
 					eventType: string;
 					timeoutMs?: number;
 					pollIntervalMs?: number;
@@ -128,7 +139,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 						| "codex_medium"
 						| "codex_low"
 						| "gemini_flash"
-						| "gemini_pro";
+						| "gemini_pro"
+						| "claude_sonnet"
+						| "claude_opus"
+						| "claude_haiku";
 				},
 			);
 

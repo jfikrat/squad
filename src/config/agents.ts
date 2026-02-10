@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 interface Settings {
 	codex?: { model?: string; reasoning?: string };
 	gemini?: { model?: string };
+	claude?: { model?: string };
 	terminal?: string;
 	display?: string;
 }
@@ -53,6 +54,15 @@ export const AGENTS: Record<string, AgentConfig> = {
 		responseDetection: "jsonl",
 		timeout: 3600000, // 60 dakika
 	},
+	claude: {
+		name: "claude",
+		command: ["claude", "--dangerously-skip-permissions"],
+		safePrefix: null,
+		readyPatterns: ["bypass permissions", "Claude Code"],
+		sessionPath: "~/.claude/projects",
+		responseDetection: "jsonl",
+		timeout: 3600000, // 60 dakika
+	},
 };
 
 export const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 dakika inaktivite
@@ -68,6 +78,13 @@ export const CODEX_REASONING: ReasoningEffort =
 	(process.env.SQUAD_CODEX_REASONING as ReasoningEffort) ||
 	(settings.codex?.reasoning as ReasoningEffort) ||
 	"xhigh";
+
+// Claude model
+// Öncelik: ENV > settings.json > default
+export const CLAUDE_MODEL =
+	process.env.SQUAD_CLAUDE_MODEL ||
+	settings.claude?.model ||
+	"claude-opus-4-6";
 
 // Gemini model (tam isim)
 // Öncelik: ENV > settings.json > default

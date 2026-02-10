@@ -6,6 +6,9 @@
   "gemini": {
     "model": "gemini-3-flash-preview"
   },
+  "claude": {
+    "model": "claude-opus-4-6"
+  },
   "terminal": "alacritty",
   "display": "pane"
 }

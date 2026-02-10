@@ -1,10 +1,19 @@
+import {
+	getClaudeStatus,
+	pollEvents as pollClaudeEvents,
+} from "../agents/claude";
 import { getCodexStatus, pollEvents as pollCodexEvents } from "../agents/codex";
 import {
 	getGeminiStatus,
 	pollEvents as pollGeminiEvents,
 } from "../agents/gemini";
 import type { AgentConfig } from "../config/agents";
-import { AGENTS, CODEX_MODEL, GEMINI_MODEL } from "../config/agents";
+import {
+	AGENTS,
+	CLAUDE_MODEL,
+	CODEX_MODEL,
+	GEMINI_MODEL,
+} from "../config/agents";
 import { INSTANCE_ID } from "../core/instance";
 import { getAllSessions, killSession } from "../core/tmux-manager";
 
@@ -14,7 +23,10 @@ type AgentType =
 	| "codex_medium"
 	| "codex_low"
 	| "gemini_flash"
-	| "gemini_pro";
+	| "gemini_pro"
+	| "claude_sonnet"
+	| "claude_opus"
+	| "claude_haiku";
 
 function getCodexConfig(agentName: string): AgentConfig | null {
 	if (!agentName.startsWith("codex_")) return null;
@@ -55,6 +67,16 @@ function getGeminiConfig(agentName: string): AgentConfig | null {
 	};
 }
 
+function getClaudeConfig(agentName: string): AgentConfig | null {
+	if (!agentName.startsWith("claude_")) return null;
+	const base = AGENTS.claude;
+	return {
+		...base,
+		name: agentName,
+		command: [...base.command, "--model", CLAUDE_MODEL],
+	};
+}
+
 export const pollEventsTool = {
 	name: "poll_events",
 	description:
@@ -71,6 +93,9 @@ export const pollEventsTool = {
 					"codex_low",
 					"gemini_flash",
 					"gemini_pro",
+					"claude_sonnet",
+					"claude_opus",
+					"claude_haiku",
 				],
 				description: "Which agent to poll events from",
 			},
@@ -100,6 +125,9 @@ export const waitForEventTool = {
 					"codex_low",
 					"gemini_flash",
 					"gemini_pro",
+					"claude_sonnet",
+					"claude_opus",
+					"claude_haiku",
 				],
 				description: "Which agent to wait for",
 			},
@@ -147,6 +175,9 @@ export const getAgentStatusTool = {
 					"codex_low",
 					"gemini_flash",
 					"gemini_pro",
+					"claude_sonnet",
+					"claude_opus",
+					"claude_haiku",
 				],
 				description: "Which agent to check status for",
 			},
@@ -169,6 +200,8 @@ export async function handlePollEvents(args: {
 
 	if (agent.startsWith("codex_")) {
 		events = pollCodexEvents(agent, peek);
+	} else if (agent.startsWith("claude_")) {
+		events = pollClaudeEvents(agent, peek);
 	} else {
 		events = pollGeminiEvents(agent, peek);
 	}
@@ -214,6 +247,8 @@ export async function handleWaitForEvent(args: {
 
 		if (agent.startsWith("codex_")) {
 			events = pollCodexEvents(agent, true); // peek mode
+		} else if (agent.startsWith("claude_")) {
+			events = pollClaudeEvents(agent, true);
 		} else {
 			events = pollGeminiEvents(agent, true);
 		}
@@ -224,6 +259,8 @@ export async function handleWaitForEvent(args: {
 			// Event'i consume et
 			if (agent.startsWith("codex_")) {
 				pollCodexEvents(agent, false);
+			} else if (agent.startsWith("claude_")) {
+				pollClaudeEvents(agent, false);
 			} else {
 				pollGeminiEvents(agent, false);
 			}
@@ -280,6 +317,8 @@ export async function handleGetAgentStatus(args: {
 		config = getCodexConfig(agent);
 	} else if (agent.startsWith("gemini_")) {
 		config = getGeminiConfig(agent);
+	} else if (agent.startsWith("claude_")) {
+		config = getClaudeConfig(agent);
 	} else {
 		config = AGENTS[agent];
 	}
@@ -304,6 +343,8 @@ export async function handleGetAgentStatus(args: {
 
 	if (agent.startsWith("codex_")) {
 		status = getCodexStatus(config);
+	} else if (agent.startsWith("claude_")) {
+		status = getClaudeStatus(config);
 	} else {
 		status = getGeminiStatus(config);
 	}
