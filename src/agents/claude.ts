@@ -78,6 +78,7 @@ export async function sendClaudePrompt(
 	config: AgentConfig,
 	workDir: string,
 	prompt: string,
+	allowFileEdits: boolean,
 ): Promise<ClaudeResult> {
 	const sessionName = getSessionName(config.name);
 
@@ -93,7 +94,8 @@ export async function sendClaudePrompt(
 		// Prompt'a request ID ve ANS talimatı ekle
 		// Newline'ları kaldır: Claude Code multiline paste'te Enter submit yerine newline ekler
 		const sanitizedPrompt = prompt.replace(/\n+/g, " ").trim();
-		const fullPrompt = `[RQ-${requestId}] ${sanitizedPrompt} --- IMPORTANT: Do NOT create, modify, or delete any files. Only analyze and respond. End your response with "[ANS-${requestId}]"`;
+		const fileConstraint = allowFileEdits ? "" : " --- IMPORTANT: Do NOT create, modify, or delete any files. Only analyze and respond.";
+		const fullPrompt = `[RQ-${requestId}] ${sanitizedPrompt}${fileConstraint} End your response with "[ANS-${requestId}]"`;
 
 		// Chunked send-keys ile gönder (paste detection bypass)
 		await sendBufferNoBracket(sessionName, fullPrompt);

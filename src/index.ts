@@ -70,14 +70,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 	switch (name) {
 		case "codex":
-			return handleCodex(args as { message: string; workDir: string });
+			return handleCodex(args as { message: string; workDir: string; allowFileEdits: boolean; model: string });
 
 		case "claude":
-			return handleClaude(args as { message: string; workDir: string });
+			return handleClaude(args as { message: string; workDir: string; allowFileEdits: boolean; model: string });
 
 		case "gemini":
 			return handleGemini(
-				args as { message: string; workDir: string; model?: string },
+				args as { message: string; workDir: string; model?: string; allowFileEdits: boolean },
 			);
 
 		case "codex_gemini":
@@ -86,6 +86,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 					message: string;
 					workDir: string;
 					gemini_model?: string;
+					allowFileEdits: boolean;
 				},
 			);
 

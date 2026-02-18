@@ -7,9 +7,8 @@ import {
 	GEMINI_MODEL,
 } from "../config/agents";
 import {
-	findCodexResponseByRequestId,
+	findCodexResponseInRecentSessions,
 	generateCodexRequestId,
-	getLatestCodexSessionFile,
 } from "../core/codex-session";
 import {
 	findResponseByRequestId,
@@ -47,8 +46,13 @@ export const geminiTool = {
 				description:
 					"Model to use (e.g., gemini-3-flash-preview, gemini-3-pro-preview). Default from settings.",
 			},
+			allowFileEdits: {
+				type: "boolean",
+				description:
+					"Allow the agent to create, modify, and delete files. Must be explicitly set.",
+			},
 		},
-		required: ["message", "workDir"],
+		required: ["message", "workDir", "allowFileEdits"],
 	},
 };
 
@@ -72,8 +76,13 @@ export const codexGeminiTool = {
 				enum: ["flash", "pro"],
 				description: "Gemini model. Default: pro",
 			},
+			allowFileEdits: {
+				type: "boolean",
+				description:
+					"Allow agents to create, modify, and delete files. Must be explicitly set.",
+			},
 		},
-		required: ["message", "workDir"],
+		required: ["message", "workDir", "allowFileEdits"],
 	},
 };
 
@@ -125,6 +134,7 @@ export async function handleGemini(args: {
 	message: string;
 	workDir: string;
 	model?: string;
+	allowFileEdits: boolean;
 }): Promise<{ content: Array<{ type: string; text: string }> }> {
 	const model = args.model || GEMINI_MODEL;
 	const config = getGeminiConfig(model);
@@ -155,6 +165,7 @@ export async function handleCodexGemini(args: {
 	message: string;
 	workDir: string;
 	gemini_model?: string;
+	allowFileEdits: boolean;
 }): Promise<{ content: Array<{ type: string; text: string }> }> {
 	const geminiModel = args.gemini_model || GEMINI_MODEL;
 
@@ -182,7 +193,10 @@ export async function handleCodexGemini(args: {
 					await waitForCodexReady(sessionName, 30000);
 				}
 
-				const fullPrompt = `[RQ-${requestId}] ${args.message}\n\nIMPORTANT: Do NOT create, modify, or delete any files. Only analyze and respond.\nIMPORTANT: End your response with "[ANS-${requestId}]"`;
+				const fileConstraint = args.allowFileEdits
+					? ""
+					: "\n\nIMPORTANT: Do NOT create, modify, or delete any files. Only analyze and respond.";
+				const fullPrompt = `[RQ-${requestId}] ${args.message}${fileConstraint}\nIMPORTANT: End your response with "[ANS-${requestId}]"`;
 				await sendBuffer(sessionName, fullPrompt);
 
 				const response = await waitForCodexResponse(
@@ -452,13 +466,10 @@ async function waitForCodexResponse(
 			throw new Error("Codex session terminated by user");
 		}
 
-		// Session JSONL'den yanıt ara
-		const latestFile = getLatestCodexSessionFile();
-		if (latestFile) {
-			const response = findCodexResponseByRequestId(latestFile, requestId);
-			if (response) {
-				return response;
-			}
+		// Birden fazla Codex session dosyasında yanıtı ara.
+		const response = findCodexResponseInRecentSessions(requestId, 30);
+		if (response) {
+			return response;
 		}
 
 		await Bun.sleep(500);

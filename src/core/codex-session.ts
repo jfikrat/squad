@@ -28,6 +28,14 @@ export function getCodexSessionDir(): string {
  * En son Codex session dosyasını bul
  */
 export function getLatestCodexSessionFile(): string | null {
+	const files = getCodexSessionFilesByMtime();
+	return files.length > 0 ? files[0] : null;
+}
+
+/**
+ * Bugünün rollout JSONL dosyalarını mtime desc sıralı döndür.
+ */
+export function getCodexSessionFilesByMtime(limit?: number): string[] {
 	const sessionDir = getCodexSessionDir();
 
 	try {
@@ -40,9 +48,13 @@ export function getLatestCodexSessionFile(): string | null {
 			}))
 			.sort((a, b) => b.mtime - a.mtime);
 
-		return files.length > 0 ? files[0].path : null;
+		const paths = files.map((f) => f.path);
+		if (typeof limit === "number" && limit > 0) {
+			return paths.slice(0, limit);
+		}
+		return paths;
 	} catch {
-		return null;
+		return [];
 	}
 }
 
@@ -86,6 +98,26 @@ export function findCodexResponseByRequestId(
 	} catch {
 		return null;
 	}
+}
+
+/**
+ * Birden fazla Codex session dosyasında request ID yanıtını ara.
+ * Aynı gün birden çok Codex oturumu açık olduğunda latest-file yanılmasını önler.
+ */
+export function findCodexResponseInRecentSessions(
+	requestId: string,
+	maxFiles = 20,
+): string | null {
+	const files = getCodexSessionFilesByMtime(maxFiles);
+
+	for (const file of files) {
+		const response = findCodexResponseByRequestId(file, requestId);
+		if (response) {
+			return response;
+		}
+	}
+
+	return null;
 }
 
 /**

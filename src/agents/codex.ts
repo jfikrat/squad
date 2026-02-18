@@ -1,8 +1,7 @@
 import type { AgentConfig } from "../config/agents";
 import {
-	findCodexResponseByRequestId,
+	findCodexResponseInRecentSessions,
 	generateCodexRequestId,
-	getLatestCodexSessionFile,
 } from "../core/codex-session";
 import { getSessionName } from "../core/instance";
 import {
@@ -77,6 +76,7 @@ export async function sendCodexPrompt(
 	config: AgentConfig,
 	workDir: string,
 	prompt: string,
+	allowFileEdits: boolean,
 ): Promise<CodexResult> {
 	const sessionName = getSessionName(config.name);
 
@@ -90,7 +90,10 @@ export async function sendCodexPrompt(
 		const requestId = generateCodexRequestId();
 
 		// Prompt'a request ID ve ANS talimatı ekle
-		const fullPrompt = `[RQ-${requestId}] ${prompt}\n\nIMPORTANT: Do NOT create, modify, or delete any files. Only analyze and respond.\nIMPORTANT: End your response with "[ANS-${requestId}]"`;
+		const fileConstraint = allowFileEdits
+			? ""
+			: "\n\nIMPORTANT: Do NOT create, modify, or delete any files. Only analyze and respond.";
+		const fullPrompt = `[RQ-${requestId}] ${prompt}${fileConstraint}\nIMPORTANT: End your response with "[ANS-${requestId}]"`;
 
 		// Prompt gönder (her zaman buffer kullan - daha güvenilir)
 		await sendBuffer(sessionName, fullPrompt);
@@ -149,13 +152,10 @@ async function waitForCodexResponse(
 			);
 		}
 
-		// Session JSONL'den yanıt ara
-		const latestFile = getLatestCodexSessionFile();
-		if (latestFile) {
-			const response = findCodexResponseByRequestId(latestFile, requestId);
-			if (response) {
-				return response;
-			}
+		// Birden fazla Codex session dosyasında yanıtı ara.
+		const response = findCodexResponseInRecentSessions(requestId, 30);
+		if (response) {
+			return response;
 		}
 
 		await Bun.sleep(500);

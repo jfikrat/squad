@@ -17,29 +17,43 @@ export const codexTool = {
 				description:
 					"Working directory for Codex to access project files. Always pass your current pwd.",
 			},
+			allowFileEdits: {
+				type: "boolean",
+				description:
+					"Allow the agent to create, modify, and delete files. Must be explicitly set.",
+			},
+			model: {
+				type: "string",
+				description:
+					"Model to use. Options: 'gpt-5.3-codex' (deep reasoning, xhigh effort), 'gpt-5.3-codex-spark' (ultra-fast, 15x speed, text-only, no reasoning).",
+			},
 		},
-		required: ["message", "workDir"],
+		required: ["message", "workDir", "allowFileEdits", "model"],
 	},
 };
 
 export async function handleCodex(args: {
 	message: string;
 	workDir: string;
+	allowFileEdits: boolean;
+	model: string;
 }): Promise<{ content: Array<{ type: string; text: string }> }> {
-	// Model ve reasoning settings'den
+	const effectiveModel = args.model;
+	const isSpark = effectiveModel === "gpt-5.3-codex-spark";
+
+	// Spark: text-only, reasoning effort desteklemiyor
+	const command = [...AGENTS.codex.command, "-m", effectiveModel];
+	if (!isSpark) {
+		command.push("-c", `model_reasoning_effort="${CODEX_REASONING}"`);
+	}
+
 	const config = {
 		...AGENTS.codex,
-		name: `codex_${CODEX_REASONING}`,
-		command: [
-			...AGENTS.codex.command,
-			"-m",
-			CODEX_MODEL,
-			"-c",
-			`model_reasoning_effort="${CODEX_REASONING}"`,
-		],
+		name: isSpark ? "codex_spark" : `codex_${CODEX_REASONING}`,
+		command,
 	};
 
-	const result = await sendCodexPrompt(config, args.workDir, args.message);
+	const result = await sendCodexPrompt(config, args.workDir, args.message, args.allowFileEdits);
 
 	if (result.success) {
 		return {

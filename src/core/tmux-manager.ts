@@ -1,3 +1,4 @@
+import { basename } from "node:path";
 import { $ } from "bun";
 import {
 	DISPLAY_MODE,
@@ -13,6 +14,92 @@ export interface TmuxSession {
 }
 
 const activeSessions = new Map<string, TmuxSession>();
+
+interface PaneInfo {
+	windowIndex: number;
+	paneIndex: number;
+	width: number;
+	height: number;
+	area: number;
+}
+
+/**
+ * Pane mode hedef tmux session'ını belirle.
+ * Öncelik:
+ * 1) SQUAD_PANE_TARGET env (manuel override)
+ * 2) TMUX_PANE env'den mevcut session (varsa)
+ * 3) En son aktif non-agent client session
+ */
+async function resolvePaneTargetSession(): Promise<string | null> {
+	const explicitTarget = process.env.SQUAD_PANE_TARGET?.trim();
+	if (explicitTarget) {
+		return explicitTarget;
+	}
+
+	const tmuxPane = process.env.TMUX_PANE?.trim();
+	if (tmuxPane) {
+		try {
+			const result =
+				await $`tmux display-message -p -t ${tmuxPane} '#{session_name}'`.quiet();
+			const sessionName = result.stdout.toString().trim();
+			if (sessionName) {
+				return sessionName;
+			}
+		} catch {
+			// no-op, client list fallback
+		}
+	}
+
+	// Service'in çalıştığı cwd'nin son dizin adını session adı olarak dene
+	// Örn: /home/fekrat/socials/x -> "x"
+	const cwdSession = basename(process.cwd());
+	if (cwdSession) {
+		try {
+			const hasSessionResult =
+				await $`tmux has-session -t ${cwdSession}`.nothrow();
+			if (hasSessionResult.exitCode === 0) {
+				const sessionClients =
+					await $`tmux list-clients -t ${cwdSession}`.nothrow();
+				if (
+					sessionClients.exitCode === 0 &&
+					sessionClients.stdout.toString().trim()
+				) {
+					return cwdSession;
+				}
+			}
+		} catch {
+			// no-op, client list fallback
+		}
+	}
+
+	try {
+		const result =
+			await $`tmux list-clients -F '#{session_name} #{client_activity}'`.quiet();
+		const clients = result.stdout
+			.toString()
+			.trim()
+			.split("\n")
+			.filter(Boolean)
+			.map((line) => {
+				const [sessionName, activityRaw] = line.trim().split(" ");
+				return {
+					sessionName,
+					activity: Number.parseInt(activityRaw || "0", 10),
+				};
+			})
+			.filter((c) => c.sessionName);
+
+		if (clients.length === 0) {
+			return null;
+		}
+
+		clients.sort((a, b) => b.activity - a.activity);
+		const preferred = clients.find((c) => !c.sessionName.startsWith("agents_"));
+		return preferred?.sessionName ?? clients[0]?.sessionName ?? null;
+	} catch {
+		return null;
+	}
+}
 
 export async function hasSession(name: string): Promise<boolean> {
 	try {
@@ -51,37 +138,58 @@ export async function createSession(
 
 	// Agent session'ını görsel olarak aç (display mode'a göre)
 	if (DISPLAY_MODE === "pane") {
-		// Mevcut tmux session'da pane olarak aç (ızgara layout)
-		// TMUX env var unset edilmeli - nested tmux attach için gerekli
-		// Trap yok: session lifecycle squad tarafından yönetilir (timeout + killSession)
+		// Hedef session'da pane olarak aç.
+		// TMUX env var unset edilmeli - nested tmux attach için gerekli.
 		const paneAttachCmd = `TMUX='' exec tmux attach -t ${name}`;
 		try {
+			const paneTargetSession = await resolvePaneTargetSession();
+			if (!paneTargetSession) {
+				throw new Error("No target tmux session for pane mode");
+			}
+
 			const paneListResult =
-				await $`tmux list-panes -F '#{pane_index} #{pane_width} #{pane_height}'`.quiet();
+				await $`tmux list-panes -t ${paneTargetSession} -F '#{window_index} #{pane_index} #{pane_width} #{pane_height}'`.quiet();
 			const panes = paneListResult.stdout
 				.toString()
 				.trim()
 				.split("\n")
 				.map((line) => {
-					const [index, width, height] = line.trim().split(" ").map(Number);
-					return { index, width, height, area: width * height };
-				});
-
-			if (panes.length <= 1) {
-				// Sadece CC var, sağa %60 ile ilk agent pane'ini aç
-				await $`tmux split-window -h -l 60% sh -c ${paneAttachCmd}`.quiet();
-			} else {
-				// Agent pane'leri arasından en büyük alanı olanı bul (pane 0 = CC, hariç tut)
-				const agentPanes = panes.filter((p) => p.index > 0);
-				const targetPane = agentPanes.reduce(
-					(max, p) => (p.area > max.area ? p : max),
-					agentPanes[0],
+					const [windowIndex, paneIndex, width, height] = line
+						.trim()
+						.split(" ")
+						.map(Number);
+					const pane: PaneInfo = {
+						windowIndex,
+						paneIndex,
+						width,
+						height,
+						area: width * height,
+					};
+					return pane;
+				})
+				.filter(
+					(p) =>
+						Number.isFinite(p.windowIndex) &&
+						Number.isFinite(p.paneIndex) &&
+						Number.isFinite(p.width) &&
+						Number.isFinite(p.height),
 				);
-				// Karakter aspect ratio (~2.5:1): width > height*2.5 ise yatay, değilse dikey böl
-				const splitFlag =
-					targetPane.width > targetPane.height * 2.5 ? "-h" : "-v";
-				await $`tmux split-window ${splitFlag} -t ${targetPane.index} sh -c ${paneAttachCmd}`.quiet();
+
+			if (panes.length === 0) {
+				throw new Error(`No panes in target session: ${paneTargetSession}`);
 			}
+
+			// En büyük alanı olan pane'i böl (okunabilir layout).
+			const targetPane = panes.reduce(
+				(max, p) => (p.area > max.area ? p : max),
+				panes[0],
+			);
+			// Karakter aspect ratio (~2.5:1): width > height*2.5 ise yatay, değilse dikey böl.
+			const splitFlag =
+				targetPane.width > targetPane.height * 2.5 ? "-h" : "-v";
+			const paneTarget = `${paneTargetSession}:${targetPane.windowIndex}.${targetPane.paneIndex}`;
+
+			await $`tmux split-window ${splitFlag} -t ${paneTarget} -l 60% sh -c ${paneAttachCmd}`.quiet();
 		} catch {
 			// tmux içinde değilsek fallback: terminal aç
 			const attachCmd = `trap 'tmux kill-session -t ${name} 2>/dev/null' EXIT; tmux attach -t ${name}`;
@@ -207,7 +315,8 @@ export async function sendBufferNoBracket(
 
 	for (let i = 0; i < text.length; i += CHUNK_SIZE) {
 		const chunk = text.slice(i, i + CHUNK_SIZE);
-		const result = await $`tmux send-keys -t ${session} -l -- ${chunk}`.nothrow();
+		const result =
+			await $`tmux send-keys -t ${session} -l -- ${chunk}`.nothrow();
 		if (result.exitCode !== 0) {
 			throw new Error(`Failed to send chunk at offset ${i}: ${result.stderr}`);
 		}
