@@ -2,14 +2,8 @@ import { sendGeminiPrompt } from "../agents/gemini";
 import type { AgentConfig } from "../config/agents";
 import {
 	AGENTS,
-	CODEX_MODEL,
-	CODEX_REASONING,
 	GEMINI_MODEL,
 } from "../config/agents";
-import {
-	findCodexResponseInRecentSessions,
-	generateCodexRequestId,
-} from "../core/codex-session";
 import {
 	findResponseByRequestId,
 	generateRequestId,
@@ -20,7 +14,6 @@ import { getSessionName } from "../core/instance";
 import {
 	capturePane,
 	createSession,
-	hasSession,
 	killSession,
 	sendBuffer,
 } from "../core/tmux-manager";
@@ -57,35 +50,6 @@ export const geminiTool = {
 	},
 };
 
-export const codexGeminiTool = {
-	name: "codex_gemini",
-	description:
-		"Start both Codex and Gemini in parallel for the same task. Returns both responses. Perfect for consensus or getting multiple perspectives on complex problems. IMPORTANT: Always pass your current working directory (pwd) as workDir.",
-	inputSchema: {
-		type: "object",
-		properties: {
-			message: {
-				type: "string",
-				description: "The question or analysis request (sent to both agents)",
-			},
-			workDir: {
-				type: "string",
-				description: "Working directory. Always pass your current pwd.",
-			},
-			gemini_model: {
-				type: "string",
-				enum: ["flash", "pro"],
-				description: "Gemini model. Default: pro",
-			},
-			allowFileEdits: {
-				type: "boolean",
-				description:
-					"Allow agents to create, modify, and delete files. Must be explicitly set.",
-			},
-		},
-		required: ["message", "workDir", "allowFileEdits"],
-	},
-};
 
 export const parallelSearchTool = {
 	name: "parallel_search",
@@ -167,110 +131,6 @@ export async function handleGemini(args: {
 	};
 }
 
-export async function handleCodexGemini(args: {
-	message: string;
-	workDir: string;
-	gemini_model?: string;
-	allowFileEdits: boolean;
-}): Promise<{ content: Array<{ type: string; text: string }> }> {
-	const geminiModel = args.gemini_model || GEMINI_MODEL;
-
-	const startTime = Date.now();
-
-	// Codex ve Gemini'yi paralel başlat
-	const [codexResult, geminiResult] = await Promise.all([
-		// Codex (settings'den model ve reasoning)
-		(async () => {
-			const sessionName = getSessionName(`codex_${CODEX_REASONING}`);
-			const requestId = generateCodexRequestId();
-			const agentStart = Date.now();
-
-			try {
-				// Session yoksa oluştur
-				if (!(await hasSession(sessionName))) {
-					await createSession(sessionName, args.workDir, [
-						"codex",
-						"--dangerously-bypass-approvals-and-sandbox",
-						"-m",
-						CODEX_MODEL,
-						"-c",
-						`model_reasoning_effort="${CODEX_REASONING}"`,
-					]);
-					await waitForCodexReady(sessionName, 30000);
-				}
-
-				const fileConstraint = args.allowFileEdits
-					? ""
-					: "\n\nIMPORTANT: Do NOT create, modify, or delete any files. Only analyze and respond.";
-				const fullPrompt = `[RQ-${requestId}] ${args.message}${fileConstraint}\nIMPORTANT: End your response with "[ANS-${requestId}]"`;
-				await sendBuffer(sessionName, fullPrompt);
-
-				const response = await waitForCodexResponse(
-					requestId,
-					3600000, // 60 min timeout
-					sessionName,
-				);
-
-				return {
-					success: true,
-					response,
-					duration: Date.now() - agentStart,
-				};
-			} catch (err) {
-				return {
-					success: false,
-					response: `Error: ${(err as Error).message}`,
-					duration: Date.now() - agentStart,
-				};
-			}
-		})(),
-
-		// Gemini
-		(async () => {
-			const config = getGeminiConfig(geminiModel);
-			const agentStart = Date.now();
-
-			try {
-				const result = await sendGeminiPrompt(
-					config,
-					args.workDir,
-					args.message,
-				);
-
-				return {
-					success: result.success,
-					response: result.response || result.error || "No response",
-					duration: Date.now() - agentStart,
-				};
-			} catch (err) {
-				return {
-					success: false,
-					response: `Error: ${(err as Error).message}`,
-					duration: Date.now() - agentStart,
-				};
-			}
-		})(),
-	]);
-
-	const totalDuration = Date.now() - startTime;
-
-	// Sonuçları formatla
-	const output = `## 🤖 Codex (${CODEX_REASONING}) - ${Math.round(codexResult.duration / 1000)}s
-${codexResult.success ? "✅" : "❌"} ${codexResult.response}
-
----
-
-## 💎 Gemini (${geminiModel}) - ${Math.round(geminiResult.duration / 1000)}s
-${geminiResult.success ? "✅" : "❌"} ${geminiResult.response}
-
----
-
-📊 **Total: ${Math.round(totalDuration / 1000)}s (parallel)**`;
-
-	return {
-		content: [{ type: "text", text: output }],
-	};
-}
 
 export async function handleParallelSearch(args: {
 	queries: string[];
@@ -436,50 +296,3 @@ async function waitForGeminiResponse(
 	throw new Error(`Response timeout (requestId: ${requestId})`);
 }
 
-async function waitForCodexReady(
-	sessionName: string,
-	timeout: number,
-): Promise<void> {
-	const patterns = ["? for shortcuts", "context left", "How can I help"];
-	const startTime = Date.now();
-
-	while (Date.now() - startTime < timeout) {
-		const output = await capturePane(sessionName);
-
-		for (const pattern of patterns) {
-			if (output.includes(pattern)) {
-				await Bun.sleep(500);
-				return;
-			}
-		}
-
-		await Bun.sleep(200);
-	}
-
-	throw new Error("Codex ready timeout");
-}
-
-async function waitForCodexResponse(
-	requestId: string,
-	timeout: number,
-	sessionName: string,
-): Promise<string> {
-	const startTime = Date.now();
-
-	while (Date.now() - startTime < timeout) {
-		// Session hala var mı kontrol et
-		if (!(await hasSession(sessionName))) {
-			throw new Error("Codex session terminated by user");
-		}
-
-		// Birden fazla Codex session dosyasında yanıtı ara.
-		const response = findCodexResponseInRecentSessions(requestId, 30);
-		if (response) {
-			return response;
-		}
-
-		await Bun.sleep(500);
-	}
-
-	throw new Error(`Codex response timeout (requestId: ${requestId})`);
-}

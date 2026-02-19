@@ -17,9 +17,7 @@ import {
 import { claudeTool, handleClaude } from "./tools/claude-tools";
 import { codexTool, handleCodex } from "./tools/codex-tools";
 import {
-	codexGeminiTool,
 	geminiTool,
-	handleCodexGemini,
 	handleGemini,
 	handleParallelSearch,
 	parallelSearchTool,
@@ -54,7 +52,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 			codexTool,
 			geminiTool,
 			claudeTool,
-			codexGeminiTool,
 			parallelSearchTool,
 			pollEventsTool,
 			waitForEventTool,
@@ -78,16 +75,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 		case "gemini":
 			return handleGemini(
 				args as { message: string; workDir: string; model?: string; allowFileEdits: boolean },
-			);
-
-		case "codex_gemini":
-			return handleCodexGemini(
-				args as {
-					message: string;
-					workDir: string;
-					gemini_model?: string;
-					allowFileEdits: boolean;
-				},
 			);
 
 		case "parallel_search":
