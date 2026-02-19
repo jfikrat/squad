@@ -24,12 +24,18 @@ export const codexTool = {
 			},
 			model: {
 				type: "string",
+				enum: ["spark", "full"],
 				description:
-					"Model to use. Options: 'gpt-5.3-codex' (deep reasoning, xhigh effort), 'gpt-5.3-codex-spark' (ultra-fast, 15x speed, text-only, no reasoning).",
+					"Model preset: 'spark' (ultra-fast, 15x speed, text-only — best for quick, surface-level coding tasks) or 'full' (xhigh reasoning, full genius mode — best for deep analysis, architecture, debugging).",
 			},
 		},
 		required: ["message", "workDir", "allowFileEdits", "model"],
 	},
+};
+
+const MODEL_PRESETS: Record<string, string> = {
+	spark: "gpt-5.3-codex-spark",
+	full: "gpt-5.3-codex",
 };
 
 export async function handleCodex(args: {
@@ -38,7 +44,7 @@ export async function handleCodex(args: {
 	allowFileEdits: boolean;
 	model: string;
 }): Promise<{ content: Array<{ type: string; text: string }> }> {
-	const effectiveModel = args.model;
+	const effectiveModel = MODEL_PRESETS[args.model];
 	const isSpark = effectiveModel === "gpt-5.3-codex-spark";
 
 	// Spark: text-only, reasoning effort desteklemiyor
