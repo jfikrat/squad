@@ -24,12 +24,18 @@ export const claudeTool = {
 			},
 			model: {
 				type: "string",
+				enum: ["opus", "sonnet"],
 				description:
-					"Model to use. Options: 'claude-opus-4-6' (default, most capable), 'claude-sonnet-4-6' (faster, efficient). Defaults to configured CLAUDE_MODEL.",
+					"Model preset: 'opus' (most capable, deep analysis, complex reasoning, architecture) or 'sonnet' (faster, efficient — best for most coding tasks).",
 			},
 		},
 		required: ["message", "workDir", "allowFileEdits", "model"],
 	},
+};
+
+const CLAUDE_MODEL_PRESETS: Record<string, string> = {
+	opus: "claude-opus-4-6",
+	sonnet: "claude-sonnet-4-6",
 };
 
 export async function handleClaude(args: {
@@ -38,16 +44,8 @@ export async function handleClaude(args: {
 	allowFileEdits: boolean;
 	model: string;
 }): Promise<{ content: Array<{ type: string; text: string }> }> {
-	const effectiveModel = args.model;
-
-	// Model isminden kısa isim çıkar
-	const shortName = effectiveModel.includes("sonnet")
-		? "sonnet"
-		: effectiveModel.includes("opus")
-			? "opus"
-			: effectiveModel.includes("haiku")
-				? "haiku"
-				: "default";
+	const effectiveModel = CLAUDE_MODEL_PRESETS[args.model];
+	const shortName = args.model;
 
 	const config = {
 		...AGENTS.claude,

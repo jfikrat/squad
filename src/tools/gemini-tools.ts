@@ -43,8 +43,9 @@ export const geminiTool = {
 			},
 			model: {
 				type: "string",
+				enum: ["flash", "pro"],
 				description:
-					"Model to use (e.g., gemini-3-flash-preview, gemini-3-pro-preview). Default from settings.",
+					"Model preset: 'flash' (ultra-fast, creative, best for quick tasks and code generation) or 'pro' (deeper analysis, more capable — best for complex problems).",
 			},
 			allowFileEdits: {
 				type: "boolean",
@@ -52,7 +53,7 @@ export const geminiTool = {
 					"Allow the agent to create, modify, and delete files. Must be explicitly set.",
 			},
 		},
-		required: ["message", "workDir", "allowFileEdits"],
+		required: ["message", "workDir", "allowFileEdits", "model"],
 	},
 };
 
@@ -130,13 +131,18 @@ function getGeminiConfig(model: string): AgentConfig {
 	};
 }
 
+const GEMINI_MODEL_PRESETS: Record<string, string> = {
+	flash: "gemini-3-flash-preview",
+	pro: "gemini-3-pro-preview",
+};
+
 export async function handleGemini(args: {
 	message: string;
 	workDir: string;
-	model?: string;
+	model: string;
 	allowFileEdits: boolean;
 }): Promise<{ content: Array<{ type: string; text: string }> }> {
-	const model = args.model || GEMINI_MODEL;
+	const model = GEMINI_MODEL_PRESETS[args.model];
 	const config = getGeminiConfig(model);
 	const result = await sendGeminiPrompt(config, args.workDir, args.message);
 
