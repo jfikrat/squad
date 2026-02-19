@@ -1,6 +1,19 @@
 # Changelog
 
-## [4.0.0] — Current
+## [4.1.0] — Current
+
+### Removed
+- `codex_gemini` tool — redundant, agents can be called individually
+- `parallel_search` tool — redundant, agents can be called individually
+
+### Changed
+- `gemini` model preset now required (was optional) — `"flash"` or `"pro"`
+- `claude` model now uses presets — `"opus"` (deep analysis) / `"sonnet"` (fast, efficient)
+- All three core agents (`codex`, `gemini`, `claude`) now use consistent preset system with `enum` constraint
+
+---
+
+## [4.0.0]
 
 ### Added
 - **Codex model presets** — `spark` (ultra-fast, text-only) and `full` (xhigh reasoning, genius mode) replace raw model name strings
