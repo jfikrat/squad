@@ -2,22 +2,25 @@
 
 ## [4.1.0] — Current
 
+### Added
+- **Unified model preset system** across all three core agents — `enum` constraint enforces valid values, empty/arbitrary strings rejected at schema level
+  - `codex`: `"spark"` (ultra-fast, text-only, quick coding) / `"full"` (xhigh reasoning, genius mode)
+  - `gemini`: `"flash"` (ultra-fast, creative, code gen) / `"pro"` (deeper analysis)
+  - `claude`: `"sonnet"` (fast, efficient, most tasks) / `"opus"` (deep analysis, complex reasoning)
+
 ### Removed
 - `codex_gemini` tool — redundant, agents can be called individually
 - `parallel_search` tool — redundant, agents can be called individually
 
 ### Changed
-- `gemini` model preset now required (was optional) — `"flash"` or `"pro"`
-- `claude` model now uses presets — `"opus"` (deep analysis) / `"sonnet"` (fast, efficient)
-- All three core agents (`codex`, `gemini`, `claude`) now use consistent preset system with `enum` constraint
+- `model` parameter is now **required** on all three agents (was optional on `gemini`)
+- Raw model name strings no longer accepted — presets only
 
 ---
 
 ## [4.0.0]
 
 ### Added
-- **Codex model presets** — `spark` (ultra-fast, text-only) and `full` (xhigh reasoning, genius mode) replace raw model name strings
-- `enum` constraint on `model` parameter — only `"spark"` or `"full"` accepted, empty values rejected at schema level
 - Multi-session response lookup — searches last 30 Codex JSONL session files instead of only the latest, prevents missed responses when multiple sessions are open
 - `cleanup` tool — kills only sessions owned by the current MCP instance, safe for concurrent use
 - **Tmux pane display mode** (`SQUAD_DISPLAY=pane`) — splits largest pane in the active session instead of opening a new terminal window
