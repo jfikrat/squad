@@ -16,12 +16,7 @@ import {
 // Tool definitions
 import { claudeTool, handleClaude } from "./tools/claude-tools";
 import { codexTool, handleCodex } from "./tools/codex-tools";
-import {
-	geminiTool,
-	handleGemini,
-	handleParallelSearch,
-	parallelSearchTool,
-} from "./tools/gemini-tools";
+import { geminiTool, handleGemini } from "./tools/gemini-tools";
 import {
 	cleanupTool,
 	getAgentStatusTool,
@@ -52,7 +47,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 			codexTool,
 			geminiTool,
 			claudeTool,
-			parallelSearchTool,
 			pollEventsTool,
 			waitForEventTool,
 			getAgentStatusTool,
@@ -75,11 +69,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 		case "gemini":
 			return handleGemini(
 				args as { message: string; workDir: string; model?: string; allowFileEdits: boolean },
-			);
-
-		case "parallel_search":
-			return handleParallelSearch(
-				args as { queries: string[]; workDir: string },
 			);
 
 		case "poll_events":
