@@ -1,7 +1,6 @@
-import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 interface GeminiMessage {
 	type: "user" | "gemini";
@@ -16,20 +15,11 @@ interface GeminiSession {
 }
 
 /**
- * workDir için SHA256 hash hesapla
- * Gemini bu hash'i session klasörü için kullanıyor
- */
-export function getProjectHash(workDir: string): string {
-	return createHash("sha256").update(workDir).digest("hex");
-}
-
-/**
  * Gemini session klasörünü bul
- * ~/.gemini/tmp/{hash}/chats/
+ * ~/.gemini/tmp/{basename(workDir)}/chats/
  */
 export function getSessionDir(workDir: string): string {
-	const hash = getProjectHash(workDir);
-	return join(homedir(), ".gemini", "tmp", hash, "chats");
+	return join(homedir(), ".gemini", "tmp", basename(workDir), "chats");
 }
 
 /**
