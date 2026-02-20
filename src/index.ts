@@ -68,7 +68,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 		case "gemini":
 			return handleGemini(
-				args as { message: string; workDir: string; model?: string; allowFileEdits: boolean },
+				args as { message: string; workDir: string; model: string; allowFileEdits: boolean },
 			);
 
 		case "poll_events":
