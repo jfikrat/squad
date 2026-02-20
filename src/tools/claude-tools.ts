@@ -45,6 +45,9 @@ export async function handleClaude(args: {
 	model: string;
 }): Promise<{ content: Array<{ type: string; text: string }> }> {
 	const effectiveModel = CLAUDE_MODEL_PRESETS[args.model];
+	if (!effectiveModel) {
+		return { content: [{ type: "text", text: `Error: Unknown model preset '${args.model}'. Valid options: ${Object.keys(CLAUDE_MODEL_PRESETS).join(", ")}` }] };
+	}
 	const shortName = args.model;
 
 	const config = {

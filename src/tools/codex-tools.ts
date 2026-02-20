@@ -45,6 +45,9 @@ export async function handleCodex(args: {
 	model: string;
 }): Promise<{ content: Array<{ type: string; text: string }> }> {
 	const effectiveModel = MODEL_PRESETS[args.model];
+	if (!effectiveModel) {
+		return { content: [{ type: "text", text: `Error: Unknown model preset '${args.model}'. Valid options: ${Object.keys(MODEL_PRESETS).join(", ")}` }] };
+	}
 	const isSpark = effectiveModel === "gpt-5.3-codex-spark";
 
 	// Spark: text-only, reasoning effort desteklemiyor
