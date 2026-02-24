@@ -26,7 +26,7 @@ export const claudeTool = {
 				type: "string",
 				enum: ["opus", "sonnet"],
 				description:
-					"Model preset: 'opus' (most capable, deep analysis, complex reasoning, architecture) or 'sonnet' (faster, efficient — best for most coding tasks).",
+					"Model preset: 'opus' = claude-opus-4-6 (most capable — deep analysis, complex reasoning, architecture), 'sonnet' = claude-sonnet-4-6 (faster, efficient — most coding tasks).",
 			},
 		},
 		required: ["message", "workDir", "allowFileEdits", "model"],

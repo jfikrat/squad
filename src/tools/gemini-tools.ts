@@ -22,7 +22,7 @@ export const geminiTool = {
 				type: "string",
 				enum: ["flash", "pro"],
 				description:
-					"Model preset: 'flash' (ultra-fast, creative, best for quick tasks and code generation) or 'pro' (deeper analysis, more capable — best for complex problems).",
+					"Model preset: 'flash' = gemini-3-flash-preview (ultra-fast, creative — quick tasks, code generation), 'pro' = gemini-3-pro-preview (deeper analysis — complex problems).",
 			},
 			allowFileEdits: {
 				type: "boolean",
