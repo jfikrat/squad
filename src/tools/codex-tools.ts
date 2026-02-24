@@ -24,9 +24,9 @@ export const codexTool = {
 			},
 			model: {
 				type: "string",
-				enum: ["spark", "full"],
+				enum: ["spark", "full", "xhigh"],
 				description:
-					"Model preset: 'spark' (ultra-fast, 15x speed, text-only — best for quick, surface-level coding tasks) or 'full' (xhigh reasoning, full genius mode — best for deep analysis, architecture, debugging).",
+					"Model preset: 'spark' (ultra-fast, 15x speed, text-only — best for quick, surface-level coding tasks), 'full' (xhigh reasoning, full genius mode — best for deep analysis, architecture, debugging), or 'xhigh' (GPT-5.2 base with xhigh reasoning — best for medical/scientific deep reasoning).",
 			},
 		},
 		required: ["message", "workDir", "allowFileEdits", "model"],
@@ -36,6 +36,7 @@ export const codexTool = {
 const MODEL_PRESETS: Record<string, string> = {
 	spark: "gpt-5.3-codex-spark",
 	full: "gpt-5.3-codex",
+	xhigh: "gpt-5.2",
 };
 
 export async function handleCodex(args: {
