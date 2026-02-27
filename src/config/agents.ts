@@ -49,7 +49,7 @@ export const AGENTS: Record<string, AgentConfig> = {
 		name: "codex",
 		command: ["codex", "--dangerously-bypass-approvals-and-sandbox"],
 		safePrefix: null,
-		readyPatterns: ["? for shortcuts", "context left", "How can I help"],
+		readyPatterns: ["% left", "? for shortcuts", "context left", "How can I help"],
 		sessionPath: "~/.codex/sessions",
 		responseDetection: "jsonl",
 		timeout: 3600000, // 60 dakika

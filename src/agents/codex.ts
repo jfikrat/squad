@@ -11,6 +11,7 @@ import {
 	hasSession,
 	killSession,
 	sendBuffer,
+	sendKeys,
 	updateLastActivity,
 } from "../core/tmux-manager";
 
@@ -49,6 +50,14 @@ export async function initCodexSession(
 	return sessionName;
 }
 
+// Interactive prompts that need auto-dismiss (Enter to accept default)
+const AUTO_DISMISS_PATTERNS = [
+	"Use ↑/↓ to move",
+	"press enter to confirm",
+	"Choose how you'd like",
+	"Try new model",
+];
+
 async function waitForReady(
 	sessionName: string,
 	patterns: string[],
@@ -58,6 +67,16 @@ async function waitForReady(
 
 	while (Date.now() - startTime < timeout) {
 		const output = await capturePane(sessionName);
+
+		// Auto-dismiss interactive prompts (e.g. model upgrade)
+		for (const dismissPattern of AUTO_DISMISS_PATTERNS) {
+			if (output.includes(dismissPattern)) {
+				const { $ } = await import("bun");
+				await $`tmux send-keys -t ${sessionName} Enter`.quiet();
+				await Bun.sleep(1000);
+				break;
+			}
+		}
 
 		for (const pattern of patterns) {
 			if (output.includes(pattern)) {
