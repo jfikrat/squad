@@ -1,6 +1,6 @@
 # Squad MCP Server
 
-**Multi-agent orchestration for Claude Code** — dispatch tasks to Codex and Gemini simultaneously.
+**Multi-agent orchestration for Claude Code** — dispatch tasks to Codex, Gemini, and Claude simultaneously.
 
 ![Squad MCP Banner](assets/banner.jpg)
 
@@ -8,10 +8,11 @@ One prompt. Multiple AI perspectives. All in your terminal.
 
 ## Features
 
-- **Parallel execution** — Run Codex (GPT-5.3) and Gemini 3 in parallel via MCP tools
+- **Parallel execution** — Run Codex (GPT-5.4), Gemini 3, and Claude in parallel via MCP tools
 - **tmux-based** — Each agent runs in its own tmux session, visible in real-time
 - **Pane layout** — Agents auto-arrange as tmux panes alongside Claude Code
 - **Instance isolation** — Multiple Claude Code sessions don't interfere with each other
+- **Model presets** — Simple preset names (spark/full, flash/pro, opus/sonnet) instead of raw model strings
 - **Configurable** — Choose models, reasoning levels, display modes via `config/settings.json`
 
 ## Quick Start
@@ -30,20 +31,20 @@ claude mcp add -s user squad -- bun run /path/to/squad/src/index.ts
 - [tmux](https://github.com/tmux/tmux) — Terminal multiplexer
 - [Codex CLI](https://github.com/openai/codex) — OpenAI Codex
 - [Gemini CLI](https://github.com/google/gemini-cli) — Google Gemini
+- [Claude CLI](https://docs.anthropic.com/en/docs/claude-code) — Anthropic Claude Code
 - Terminal emulator (alacritty, kitty, wezterm, etc.) — for `display: "terminal"` mode
 
 ## Tools
 
 | Tool | Parameters | Description |
 |------|-----------|-------------|
-| `codex` | `message`, `workDir` | Single Codex call (model + reasoning from settings) |
-| `gemini` | `message`, `workDir`, `model?` | Single Gemini call (model from settings or parameter) |
-| `codex_gemini` | `message`, `workDir`, `gemini_model?` | Parallel Codex + Gemini (consensus / dual perspective) |
-| `parallel_search` | `queries`, `workDir` | 4 agents (2 Gemini + 2 Codex) researching different queries |
-| `cleanup` | — | Kill all agent sessions owned by this instance |
+| `codex` | `message`, `workDir`, `allowFileEdits`, `model` | Codex call. Presets: `spark` (gpt-5.3-codex-spark, ultra-fast), `full` (gpt-5.4-codex, deep analysis) |
+| `gemini` | `message`, `workDir`, `allowFileEdits`, `model` | Gemini call. Presets: `flash` (gemini-3-flash-preview), `pro` (gemini-3.1-pro-preview) |
+| `claude` | `message`, `workDir`, `allowFileEdits`, `model` | Claude call. Presets: `opus` (claude-opus-4-6), `sonnet` (claude-sonnet-4-6) |
 | `poll_events` | `agent`, `peek?` | Poll pending events from an agent |
 | `wait_for_event` | `agent`, `eventType`, `timeoutMs?` | Block until a specific event arrives |
 | `get_agent_status` | `agent` | Query agent connection state and activity |
+| `cleanup` | — | Kill all agent sessions owned by this instance |
 
 ## Configuration
 
@@ -52,11 +53,14 @@ Edit `config/settings.json` to customize:
 ```json
 {
   "codex": {
-    "model": "gpt-5.3-codex",
+    "model": "gpt-5.4-codex",
     "reasoning": "xhigh"
   },
   "gemini": {
     "model": "gemini-3-flash-preview"
+  },
+  "claude": {
+    "model": "claude-opus-4-6"
   },
   "terminal": "alacritty",
   "display": "pane"
@@ -72,9 +76,10 @@ After changes, reconnect the MCP server in Claude Code:
 
 | Setting | Values | Description |
 |---------|--------|-------------|
-| `codex.model` | `gpt-5.3-codex`, `gpt-5.2` | Codex model |
+| `codex.model` | `gpt-5.4-codex`, `gpt-5.3-codex-spark` | Codex model |
 | `codex.reasoning` | `xhigh`, `high`, `medium`, `low` | Reasoning effort level |
-| `gemini.model` | `gemini-3-flash-preview`, `gemini-3-pro-preview` | Gemini model |
+| `gemini.model` | `gemini-3-flash-preview`, `gemini-3.1-pro-preview` | Gemini model |
+| `claude.model` | `claude-opus-4-6`, `claude-sonnet-4-6` | Claude model |
 | `terminal` | `alacritty`, `kitty`, `wezterm`, ... | Terminal emulator |
 | `display` | `pane`, `terminal`, `none` | Agent display mode |
 
@@ -90,12 +95,12 @@ After changes, reconnect the MCP server in Claude Code:
 
 ```
 2 agents:                        3+ agents:
-┌──────────┬───────────┐         ┌──────────┬─────┬─────┐
-│          │  Codex    │         │          │ A1  │ A2  │
-│  Claude  ├───────────┤         │  Claude  ├─────┼─────┤
-│  Code    │  Gemini   │         │  Code    │ A3  │ A4  │
-│  (40%)   │  (60%)    │         │  (40%)   │   (60%)   │
-└──────────┴───────────┘         └──────────┴───────────┘
++-----------+------------+       +-----------+------+------+
+|           |  Codex     |       |           | A1   | A2   |
+|  Claude   +------------+       |  Claude   +------+------+
+|  Code     |  Gemini    |       |  Code     | A3   | A4   |
+|  (40%)    |  (60%)     |       |  (40%)    |   (60%)     |
++-----------+------------+       +-----------+-------------+
 ```
 
 ### Environment Variables (optional override)
@@ -107,6 +112,7 @@ Priority: ENV > settings.json > default
 | `SQUAD_CODEX_MODEL` | Codex model |
 | `SQUAD_CODEX_REASONING` | Codex reasoning effort |
 | `SQUAD_GEMINI_MODEL` | Gemini model |
+| `SQUAD_CLAUDE_MODEL` | Claude model |
 | `SQUAD_TERMINAL` | Terminal emulator |
 | `SQUAD_DISPLAY` | Display mode (`pane`, `terminal`, `none`) |
 
@@ -125,14 +131,17 @@ src/
 │   ├── instance.ts         # MCP instance ID (session isolation)
 │   ├── codex-session.ts    # Codex JSONL session reader
 │   ├── gemini-session.ts   # Gemini JSON session reader
+│   ├── claude-session.ts   # Claude JSONL session reader
 │   ├── response-parser.ts  # Response cleanup
 │   └── session-watcher.ts  # File watching utilities
 ├── agents/
 │   ├── codex.ts            # Codex agent
-│   └── gemini.ts           # Gemini agent
+│   ├── gemini.ts           # Gemini agent
+│   └── claude.ts           # Claude agent
 └── tools/
-    ├── codex-tools.ts      # Codex tool
-    ├── gemini-tools.ts     # Gemini + parallel_search tools
+    ├── codex-tools.ts      # Codex tool (spark / full presets)
+    ├── gemini-tools.ts     # Gemini tool (flash / pro presets)
+    ├── claude-tools.ts     # Claude tool (opus / sonnet presets)
     └── status-tools.ts     # poll_events, wait_for_event, get_agent_status, cleanup
 ```
 
@@ -140,9 +149,8 @@ src/
 
 - **tmux-based**: Each agent runs in a separate tmux session
 - **Instance isolation**: Each MCP instance gets a unique ID — sessions never collide
+- **Preset-only models**: Model parameter is a required enum, no raw strings accepted
 - **Pane grid layout**: In `display: "pane"` mode, agents auto-arrange in a grid
-- **Read-only agents**: Codex prompts include file modification restrictions
-- **Bracketed paste**: Multiline input via `tmux paste-buffer -p`
 - **Request ID system**: `[RQ-xxx]` / `[ANS-xxx]` markers for response matching
 - **60 min timeout**: Maximum wait time per operation
 - **30 min inactivity**: Unused sessions are automatically cleaned up
