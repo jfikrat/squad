@@ -18,6 +18,7 @@ import { INSTANCE_ID } from "../core/instance";
 import { getAllSessions, killSession } from "../core/tmux-manager";
 
 type AgentType =
+	| "codex_spark"
 	| "codex_xhigh"
 	| "codex_high"
 	| "codex_medium"
@@ -25,8 +26,7 @@ type AgentType =
 	| "gemini_flash"
 	| "gemini_pro"
 	| "claude_sonnet"
-	| "claude_opus"
-	| "claude_haiku";
+	| "claude_opus";
 
 function getCodexConfig(agentName: string): AgentConfig | null {
 	if (!agentName.startsWith("codex_")) return null;
@@ -87,6 +87,7 @@ export const pollEventsTool = {
 			agent: {
 				type: "string",
 				enum: [
+					"codex_spark",
 					"codex_xhigh",
 					"codex_high",
 					"codex_medium",
@@ -95,7 +96,6 @@ export const pollEventsTool = {
 					"gemini_pro",
 					"claude_sonnet",
 					"claude_opus",
-					"claude_haiku",
 				],
 				description: "Which agent to poll events from",
 			},
@@ -119,6 +119,7 @@ export const waitForEventTool = {
 			agent: {
 				type: "string",
 				enum: [
+					"codex_spark",
 					"codex_xhigh",
 					"codex_high",
 					"codex_medium",
@@ -127,7 +128,6 @@ export const waitForEventTool = {
 					"gemini_pro",
 					"claude_sonnet",
 					"claude_opus",
-					"claude_haiku",
 				],
 				description: "Which agent to wait for",
 			},
@@ -169,6 +169,7 @@ export const getAgentStatusTool = {
 			agent: {
 				type: "string",
 				enum: [
+					"codex_spark",
 					"codex_xhigh",
 					"codex_high",
 					"codex_medium",
@@ -177,7 +178,6 @@ export const getAgentStatusTool = {
 					"gemini_pro",
 					"claude_sonnet",
 					"claude_opus",
-					"claude_haiku",
 				],
 				description: "Which agent to check status for",
 			},

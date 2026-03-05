@@ -41,7 +41,11 @@ const GEMINI_MODEL_PRESETS: Record<string, string> = {
 
 function getGeminiConfig(model: string): AgentConfig {
 	const base = AGENTS.gemini;
-	const shortName = model.includes("flash") ? "flash" : model.includes("pro") ? "pro" : model;
+	const shortName = model.includes("flash")
+		? "flash"
+		: model.includes("pro")
+			? "pro"
+			: model;
 	return {
 		...base,
 		name: `gemini_${shortName}`,
@@ -62,14 +66,23 @@ export async function handleGemini(args: {
 }): Promise<{ content: Array<{ type: string; text: string }> }> {
 	const model = GEMINI_MODEL_PRESETS[args.model];
 	if (!model) {
-		return { content: [{ type: "text", text: `Error: Unknown model preset '${args.model}'. Valid options: ${Object.keys(GEMINI_MODEL_PRESETS).join(", ")}` }] };
+		return {
+			content: [
+				{
+					type: "text",
+					text: `Error: Unknown model preset '${args.model}'. Valid options: ${Object.keys(GEMINI_MODEL_PRESETS).join(", ")}`,
+				},
+			],
+		};
 	}
 	const config = getGeminiConfig(model);
 	const result = await sendGeminiPrompt(config, args.workDir, args.message);
 
 	if (result.success) {
 		return {
-			content: [{ type: "text", text: result.response || "No response received" }],
+			content: [
+				{ type: "text", text: result.response || "No response received" },
+			],
 		};
 	}
 

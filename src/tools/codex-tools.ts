@@ -1,5 +1,5 @@
 import { sendCodexPrompt } from "../agents/codex";
-import { AGENTS, CODEX_MODEL, CODEX_REASONING } from "../config/agents";
+import { AGENTS, CODEX_REASONING } from "../config/agents";
 
 export const codexTool = {
 	name: "codex",
@@ -24,9 +24,9 @@ export const codexTool = {
 			},
 			model: {
 				type: "string",
-				enum: ["spark", "full", "xhigh"],
+				enum: ["spark", "full"],
 				description:
-					"Model preset: 'spark' = gpt-5.3-codex-spark (ultra-fast, 15x speed, text-only — quick coding tasks), 'full' = gpt-5.3-codex (xhigh reasoning — deep analysis, architecture, debugging), 'xhigh' = gpt-5.2 (xhigh reasoning — medical/scientific deep reasoning).",
+					"Model preset: 'spark' = gpt-5.3-codex-spark (ultra-fast, 15x speed, text-only — quick coding tasks), 'full' = gpt-5.4-codex (xhigh reasoning — deep analysis, architecture, debugging).",
 			},
 		},
 		required: ["message", "workDir", "allowFileEdits", "model"],
@@ -35,8 +35,7 @@ export const codexTool = {
 
 const MODEL_PRESETS: Record<string, string> = {
 	spark: "gpt-5.3-codex-spark",
-	full: "gpt-5.3-codex",
-	xhigh: "gpt-5.2",
+	full: "gpt-5.4-codex",
 };
 
 export async function handleCodex(args: {
@@ -47,7 +46,14 @@ export async function handleCodex(args: {
 }): Promise<{ content: Array<{ type: string; text: string }> }> {
 	const effectiveModel = MODEL_PRESETS[args.model];
 	if (!effectiveModel) {
-		return { content: [{ type: "text", text: `Error: Unknown model preset '${args.model}'. Valid options: ${Object.keys(MODEL_PRESETS).join(", ")}` }] };
+		return {
+			content: [
+				{
+					type: "text",
+					text: `Error: Unknown model preset '${args.model}'. Valid options: ${Object.keys(MODEL_PRESETS).join(", ")}`,
+				},
+			],
+		};
 	}
 	const isSpark = effectiveModel === "gpt-5.3-codex-spark";
 
@@ -63,7 +69,12 @@ export async function handleCodex(args: {
 		command,
 	};
 
-	const result = await sendCodexPrompt(config, args.workDir, args.message, args.allowFileEdits);
+	const result = await sendCodexPrompt(
+		config,
+		args.workDir,
+		args.message,
+		args.allowFileEdits,
+	);
 
 	if (result.success) {
 		return {

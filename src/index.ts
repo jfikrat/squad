@@ -61,20 +61,40 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 	switch (name) {
 		case "codex":
-			return handleCodex(args as { message: string; workDir: string; allowFileEdits: boolean; model: string });
+			return handleCodex(
+				args as {
+					message: string;
+					workDir: string;
+					allowFileEdits: boolean;
+					model: string;
+				},
+			);
 
 		case "claude":
-			return handleClaude(args as { message: string; workDir: string; allowFileEdits: boolean; model: string });
+			return handleClaude(
+				args as {
+					message: string;
+					workDir: string;
+					allowFileEdits: boolean;
+					model: string;
+				},
+			);
 
 		case "gemini":
 			return handleGemini(
-				args as { message: string; workDir: string; model: string; allowFileEdits: boolean },
+				args as {
+					message: string;
+					workDir: string;
+					model: string;
+					allowFileEdits: boolean;
+				},
 			);
 
 		case "poll_events":
 			return handlePollEvents(
 				args as {
 					agent:
+						| "codex_spark"
 						| "codex_xhigh"
 						| "codex_high"
 						| "codex_medium"
@@ -82,8 +102,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 						| "gemini_flash"
 						| "gemini_pro"
 						| "claude_sonnet"
-						| "claude_opus"
-						| "claude_haiku";
+						| "claude_opus";
 					peek?: boolean;
 				},
 			);
@@ -92,6 +111,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 			return handleWaitForEvent(
 				args as {
 					agent:
+						| "codex_spark"
 						| "codex_xhigh"
 						| "codex_high"
 						| "codex_medium"
@@ -99,8 +119,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 						| "gemini_flash"
 						| "gemini_pro"
 						| "claude_sonnet"
-						| "claude_opus"
-						| "claude_haiku";
+						| "claude_opus";
 					eventType: string;
 					timeoutMs?: number;
 					pollIntervalMs?: number;
@@ -111,6 +130,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 			return handleGetAgentStatus(
 				args as {
 					agent:
+						| "codex_spark"
 						| "codex_xhigh"
 						| "codex_high"
 						| "codex_medium"
@@ -118,8 +138,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 						| "gemini_flash"
 						| "gemini_pro"
 						| "claude_sonnet"
-						| "claude_opus"
-						| "claude_haiku";
+						| "claude_opus";
 				},
 			);
 

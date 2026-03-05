@@ -49,7 +49,12 @@ export const AGENTS: Record<string, AgentConfig> = {
 		name: "codex",
 		command: ["codex", "--dangerously-bypass-approvals-and-sandbox"],
 		safePrefix: null,
-		readyPatterns: ["% left", "? for shortcuts", "context left", "How can I help"],
+		readyPatterns: [
+			"% left",
+			"? for shortcuts",
+			"context left",
+			"How can I help",
+		],
 		sessionPath: "~/.codex/sessions",
 		responseDetection: "jsonl",
 		timeout: 3600000, // 60 dakika
@@ -71,7 +76,7 @@ export const MAX_PARALLEL_SEARCH = 5;
 // Codex model ve reasoning effort
 // Öncelik: ENV > settings.json > default
 export const CODEX_MODEL =
-	process.env.SQUAD_CODEX_MODEL || settings.codex?.model || "gpt-5.3-codex";
+	process.env.SQUAD_CODEX_MODEL || settings.codex?.model || "gpt-5.4-codex";
 
 export type ReasoningEffort = "xhigh" | "high" | "medium" | "low";
 export const CODEX_REASONING: ReasoningEffort =
@@ -82,9 +87,7 @@ export const CODEX_REASONING: ReasoningEffort =
 // Claude model
 // Öncelik: ENV > settings.json > default
 export const CLAUDE_MODEL =
-	process.env.SQUAD_CLAUDE_MODEL ||
-	settings.claude?.model ||
-	"claude-opus-4-6";
+	process.env.SQUAD_CLAUDE_MODEL || settings.claude?.model || "claude-opus-4-6";
 
 // Gemini model (tam isim)
 // Öncelik: ENV > settings.json > default

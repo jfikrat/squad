@@ -94,7 +94,9 @@ export async function sendClaudePrompt(
 		// Prompt'a request ID ve ANS talimatı ekle
 		// Newline'ları kaldır: Claude Code multiline paste'te Enter submit yerine newline ekler
 		const sanitizedPrompt = prompt.replace(/\n+/g, " ").trim();
-		const fileConstraint = allowFileEdits ? "" : " --- IMPORTANT: Do NOT create, modify, or delete any files. Only analyze and respond.";
+		const fileConstraint = allowFileEdits
+			? ""
+			: " --- IMPORTANT: Do NOT create, modify, or delete any files. Only analyze and respond.";
 		const fullPrompt = `[RQ-${requestId}] ${sanitizedPrompt}${fileConstraint} End your response with "[ANS-${requestId}]"`;
 
 		// Chunked send-keys ile gönder (paste detection bypass)

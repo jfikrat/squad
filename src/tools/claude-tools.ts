@@ -46,7 +46,14 @@ export async function handleClaude(args: {
 }): Promise<{ content: Array<{ type: string; text: string }> }> {
 	const effectiveModel = CLAUDE_MODEL_PRESETS[args.model];
 	if (!effectiveModel) {
-		return { content: [{ type: "text", text: `Error: Unknown model preset '${args.model}'. Valid options: ${Object.keys(CLAUDE_MODEL_PRESETS).join(", ")}` }] };
+		return {
+			content: [
+				{
+					type: "text",
+					text: `Error: Unknown model preset '${args.model}'. Valid options: ${Object.keys(CLAUDE_MODEL_PRESETS).join(", ")}`,
+				},
+			],
+		};
 	}
 	const shortName = args.model;
 
@@ -56,7 +63,12 @@ export async function handleClaude(args: {
 		command: [...AGENTS.claude.command, "--model", effectiveModel],
 	};
 
-	const result = await sendClaudePrompt(config, args.workDir, args.message, args.allowFileEdits);
+	const result = await sendClaudePrompt(
+		config,
+		args.workDir,
+		args.message,
+		args.allowFileEdits,
+	);
 
 	if (result.success) {
 		return {
