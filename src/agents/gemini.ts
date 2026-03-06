@@ -47,7 +47,7 @@ export async function initGeminiSession(
 	await createSession(sessionName, workDir, config.command);
 
 	// Ready olana kadar bekle
-	await waitForReady(sessionName, config.readyPatterns, config.timeout);
+	await waitForReady(sessionName, config.readyPatterns);
 
 	return sessionName;
 }
@@ -55,16 +55,12 @@ export async function initGeminiSession(
 async function waitForReady(
 	sessionName: string,
 	patterns: string[],
-	timeout: number,
 ): Promise<void> {
-	const startTime = Date.now();
-
-	while (Date.now() - startTime < timeout) {
+	while (true) {
 		const output = await capturePane(sessionName);
 
 		for (const pattern of patterns) {
 			if (output.includes(pattern)) {
-				// Biraz daha bekle, tamamen hazır olsun
 				await Bun.sleep(500);
 				return;
 			}
@@ -72,8 +68,6 @@ async function waitForReady(
 
 		await Bun.sleep(200);
 	}
-
-	throw new Error(`Gemini session ready timeout after ${timeout}ms`);
 }
 
 export async function sendGeminiPrompt(
@@ -109,13 +103,7 @@ export async function sendGeminiPrompt(
 		await sendBuffer(sessionName, fullPrompt);
 
 		// Response bekle (önce JSON, fallback tmux)
-		const response = await waitForResponse(
-			sessionName,
-			marker,
-			config.timeout,
-			requestId,
-			workDir,
-		);
+		const response = await waitForResponse(sessionName, requestId, workDir);
 
 		// Cevap alındı, lastActivity güncelle
 		updateLastActivity(sessionName);
@@ -151,15 +139,12 @@ export async function sendGeminiPrompt(
 
 async function waitForResponse(
 	sessionName: string,
-	marker: string,
-	timeout: number,
 	requestId: string,
 	workDir: string,
 ): Promise<string> {
-	const startTime = Date.now();
 	const sessionDir = getSessionDir(workDir);
 
-	while (Date.now() - startTime < timeout) {
+	while (true) {
 		// Session hala var mı kontrol et (kullanıcı manuel kapatmış olabilir)
 		if (!(await hasSession(sessionName))) {
 			throw new Error(
@@ -178,10 +163,6 @@ async function waitForResponse(
 
 		await Bun.sleep(500);
 	}
-
-	throw new Error(
-		`Gemini response timeout after ${timeout}ms (requestId: ${requestId})`,
-	);
 }
 
 export async function stopGeminiSession(config: AgentConfig): Promise<void> {

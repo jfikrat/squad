@@ -46,7 +46,7 @@ export async function initClaudeSession(
 	await createSession(sessionName, workDir, config.command);
 
 	// Ready olana kadar bekle
-	await waitForReady(sessionName, config.readyPatterns, config.timeout);
+	await waitForReady(sessionName, config.readyPatterns);
 
 	return sessionName;
 }
@@ -54,11 +54,8 @@ export async function initClaudeSession(
 async function waitForReady(
 	sessionName: string,
 	patterns: string[],
-	timeout: number,
 ): Promise<void> {
-	const startTime = Date.now();
-
-	while (Date.now() - startTime < timeout) {
+	while (true) {
 		const output = await capturePane(sessionName);
 
 		for (const pattern of patterns) {
@@ -70,8 +67,6 @@ async function waitForReady(
 
 		await Bun.sleep(200);
 	}
-
-	throw new Error(`Claude session ready timeout after ${timeout}ms`);
 }
 
 export async function sendClaudePrompt(
@@ -105,7 +100,6 @@ export async function sendClaudePrompt(
 		// Response bekle (JSONL parsing)
 		const response = await waitForClaudeResponse(
 			requestId,
-			config.timeout,
 			sessionName,
 			workDir,
 		);
@@ -144,14 +138,13 @@ export async function sendClaudePrompt(
 
 async function waitForClaudeResponse(
 	requestId: string,
-	timeout: number,
 	sessionName: string,
 	workDir: string,
 ): Promise<string> {
 	const startTime = Date.now();
 	const sessionDir = getClaudeSessionDir(workDir);
 
-	while (Date.now() - startTime < timeout) {
+	while (true) {
 		// Session hala var mı kontrol et (kullanıcı manuel kapatmış olabilir)
 		if (!(await hasSession(sessionName))) {
 			throw new Error(
@@ -171,10 +164,6 @@ async function waitForClaudeResponse(
 
 		await Bun.sleep(500);
 	}
-
-	throw new Error(
-		`Claude response timeout after ${timeout}ms (requestId: ${requestId})`,
-	);
 }
 
 export async function stopClaudeSession(config: AgentConfig): Promise<void> {

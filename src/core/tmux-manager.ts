@@ -373,14 +373,3 @@ export function updateLastActivity(name: string): void {
 export function getAllSessions(): TmuxSession[] {
 	return Array.from(activeSessions.values());
 }
-
-export async function cleanupInactiveSessions(
-	timeoutMs: number,
-): Promise<void> {
-	const now = Date.now();
-	for (const [name, session] of activeSessions) {
-		if (now - session.lastActivity.getTime() > timeoutMs) {
-			await killSession(name);
-		}
-	}
-}

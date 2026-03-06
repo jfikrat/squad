@@ -32,7 +32,6 @@ export interface AgentConfig {
 	readyPatterns: string[];
 	sessionPath?: string;
 	responseDetection: "marker" | "jsonl";
-	timeout: number;
 }
 
 export const AGENTS: Record<string, AgentConfig> = {
@@ -43,7 +42,6 @@ export const AGENTS: Record<string, AgentConfig> = {
 		responseMarker: "◆END◆",
 		readyPatterns: ["YOLO mode", "Type your message", "Model:"],
 		responseDetection: "marker",
-		timeout: 3600000, // 60 dakika
 	},
 	codex: {
 		name: "codex",
@@ -57,7 +55,6 @@ export const AGENTS: Record<string, AgentConfig> = {
 		],
 		sessionPath: "~/.codex/sessions",
 		responseDetection: "jsonl",
-		timeout: 3600000, // 60 dakika
 	},
 	claude: {
 		name: "claude",
@@ -66,17 +63,15 @@ export const AGENTS: Record<string, AgentConfig> = {
 		readyPatterns: ["bypass permissions", "Claude Code"],
 		sessionPath: "~/.claude/projects",
 		responseDetection: "jsonl",
-		timeout: 3600000, // 60 dakika
 	},
 };
 
-export const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 dakika inaktivite
 export const MAX_PARALLEL_SEARCH = 5;
 
 // Codex model ve reasoning effort
 // Öncelik: ENV > settings.json > default
 export const CODEX_MODEL =
-	process.env.SQUAD_CODEX_MODEL || settings.codex?.model || "gpt-5.4-codex";
+	process.env.SQUAD_CODEX_MODEL || settings.codex?.model || "gpt-5.4";
 
 export type ReasoningEffort = "xhigh" | "high" | "medium" | "low";
 export const CODEX_REASONING: ReasoningEffort =

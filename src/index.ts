@@ -6,12 +6,7 @@ import {
 	ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
-import { SESSION_TIMEOUT } from "./config/agents";
-import {
-	cleanupInactiveSessions,
-	getAllSessions,
-	killSession,
-} from "./core/tmux-manager";
+import { getAllSessions, killSession } from "./core/tmux-manager";
 
 // Tool definitions
 import { claudeTool, handleClaude } from "./tools/claude-tools";
@@ -149,11 +144,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 			throw new Error(`Unknown tool: ${name}`);
 	}
 });
-
-// Inaktif session cleanup (her dakika)
-setInterval(() => {
-	cleanupInactiveSessions(SESSION_TIMEOUT).catch(console.error);
-}, 60000);
 
 // Graceful shutdown - tüm tmux session'ları kapat
 async function cleanup() {

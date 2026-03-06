@@ -362,7 +362,6 @@ export async function handleGetAgentStatus(args: {
 						pendingEvents: status.pendingEvents,
 						config: {
 							command: config.command.join(" "),
-							timeout: config.timeout,
 							responseDetection: config.responseDetection,
 						},
 					},

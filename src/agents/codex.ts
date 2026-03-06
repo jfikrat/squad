@@ -45,7 +45,7 @@ export async function initCodexSession(
 	await createSession(sessionName, workDir, config.command);
 
 	// Ready olana kadar bekle
-	await waitForReady(sessionName, config.readyPatterns, config.timeout);
+	await waitForReady(sessionName, config.readyPatterns);
 
 	return sessionName;
 }
@@ -61,11 +61,8 @@ const AUTO_DISMISS_PATTERNS = [
 async function waitForReady(
 	sessionName: string,
 	patterns: string[],
-	timeout: number,
 ): Promise<void> {
-	const startTime = Date.now();
-
-	while (Date.now() - startTime < timeout) {
+	while (true) {
 		const output = await capturePane(sessionName);
 
 		// Auto-dismiss interactive prompts (e.g. model upgrade)
@@ -87,8 +84,6 @@ async function waitForReady(
 
 		await Bun.sleep(200);
 	}
-
-	throw new Error(`Codex session ready timeout after ${timeout}ms`);
 }
 
 export async function sendCodexPrompt(
@@ -118,11 +113,7 @@ export async function sendCodexPrompt(
 		await sendBuffer(sessionName, fullPrompt);
 
 		// Response bekle (JSON parsing)
-		const response = await waitForCodexResponse(
-			requestId,
-			config.timeout,
-			sessionName,
-		);
+		const response = await waitForCodexResponse(requestId, sessionName);
 
 		// Cevap alındı, lastActivity güncelle
 		updateLastActivity(sessionName);
@@ -158,12 +149,9 @@ export async function sendCodexPrompt(
 
 async function waitForCodexResponse(
 	requestId: string,
-	timeout: number,
 	sessionName: string,
 ): Promise<string> {
-	const startTime = Date.now();
-
-	while (Date.now() - startTime < timeout) {
+	while (true) {
 		// Session hala var mı kontrol et (kullanıcı manuel kapatmış olabilir)
 		if (!(await hasSession(sessionName))) {
 			throw new Error(
@@ -179,10 +167,6 @@ async function waitForCodexResponse(
 
 		await Bun.sleep(500);
 	}
-
-	throw new Error(
-		`Codex response timeout after ${timeout}ms (requestId: ${requestId})`,
-	);
 }
 
 export async function stopCodexSession(config: AgentConfig): Promise<void> {
