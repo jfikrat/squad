@@ -5,7 +5,7 @@
  * Bu ID tmux session isimlerinde kullanılarak farklı Claude Code
  * instance'larının session'larının çakışması önlenir.
  *
- * Örnek: agents_codex_high → agents_a7x2_codex_high
+ * Örnek: agents_codex_smart → agents_a7x2_codex_smart
  */
 
 function generateInstanceId(): string {
@@ -22,8 +22,8 @@ export const INSTANCE_ID = generateInstanceId();
 
 /**
  * Session ismi oluştur (instance ID ile prefix'li)
- * @param name Agent/session adı (örn: "codex_high", "gemini_flash")
- * @returns Unique session ismi (örn: "agents_a7x2_codex_high")
+ * @param name Agent/session adı (örn: "codex_smart", "gemini_flash")
+ * @returns Unique session ismi (örn: "agents_a7x2_codex_smart")
  */
 export function getSessionName(name: string): string {
 	return `agents_${INSTANCE_ID}_${name}`;

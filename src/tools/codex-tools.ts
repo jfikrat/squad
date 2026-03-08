@@ -1,10 +1,10 @@
 import { sendCodexPrompt } from "../agents/codex";
-import { AGENTS, CODEX_REASONING } from "../config/agents";
+import { AGENTS } from "../config/agents";
 
 export const codexTool = {
 	name: "codex",
 	description:
-		"Codex for deep technical analysis, architecture review, debugging, and code review. IMPORTANT: Always pass your current working directory (pwd) as workDir so Codex can access project files.",
+		"Codex for deep technical analysis, architecture review, debugging, and code review. model MUST be 'spark' or 'smart' (do NOT use raw model names). Always pass pwd as workDir.",
 	inputSchema: {
 		type: "object",
 		properties: {
@@ -24,9 +24,9 @@ export const codexTool = {
 			},
 			model: {
 				type: "string",
-				enum: ["spark", "full"],
+				enum: ["spark", "smart"],
 				description:
-					"Model preset: 'spark' = gpt-5.3-codex-spark (ultra-fast, 15x speed, text-only — quick coding tasks), 'full' = gpt-5.4-codex (xhigh reasoning — deep analysis, architecture, debugging).",
+					"Model preset (MUST be exactly one of the enum values, do NOT enter raw model names): 'spark' = ultra-fast text-only for quick tasks, 'smart' = deep reasoning for analysis and debugging.",
 			},
 		},
 		required: ["message", "workDir", "allowFileEdits", "model"],
@@ -35,7 +35,7 @@ export const codexTool = {
 
 const MODEL_PRESETS: Record<string, string> = {
 	spark: "gpt-5.3-codex-spark",
-	full: "gpt-5.4-codex",
+	smart: "gpt-5.4",
 };
 
 export async function handleCodex(args: {
@@ -55,17 +55,13 @@ export async function handleCodex(args: {
 			],
 		};
 	}
-	const isSpark = effectiveModel === "gpt-5.3-codex-spark";
-
-	// Spark: text-only, reasoning effort desteklemiyor
+	const reasoning = args.model === "spark" ? "xhigh" : "high";
 	const command = [...AGENTS.codex.command, "-m", effectiveModel];
-	if (!isSpark) {
-		command.push("-c", `model_reasoning_effort="${CODEX_REASONING}"`);
-	}
+	command.push("-c", `model_reasoning_effort="${reasoning}"`);
 
 	const config = {
 		...AGENTS.codex,
-		name: isSpark ? "codex_spark" : `codex_${CODEX_REASONING}`,
+		name: `codex_${args.model}`,
 		command,
 	};
 

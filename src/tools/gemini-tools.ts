@@ -5,7 +5,7 @@ import { AGENTS } from "../config/agents";
 export const geminiTool = {
 	name: "gemini",
 	description:
-		"Gemini for fast code generation and creative analysis. Uses native Gemini CLI in visible tmux session. IMPORTANT: Always pass your current working directory (pwd) as workDir so Gemini can access project files.",
+		"Gemini for fast code generation and creative analysis. model MUST be 'flash' or 'pro' (do NOT use raw model names). Always pass pwd as workDir.",
 	inputSchema: {
 		type: "object",
 		properties: {
@@ -22,7 +22,7 @@ export const geminiTool = {
 				type: "string",
 				enum: ["flash", "pro"],
 				description:
-					"Model preset: 'flash' = gemini-3-flash-preview (ultra-fast, creative — quick tasks, code generation), 'pro' = gemini-3.1-pro-preview (deeper analysis — complex problems).",
+					"Model preset (MUST be exactly one of the enum values, do NOT enter raw model names): 'flash' = ultra-fast for quick tasks, 'pro' = deeper analysis for complex problems.",
 			},
 			allowFileEdits: {
 				type: "boolean",

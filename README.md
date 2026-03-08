@@ -38,7 +38,7 @@ claude mcp add -s user squad -- bun run /path/to/squad/src/index.ts
 
 | Tool | Parameters | Description |
 |------|-----------|-------------|
-| `codex` | `message`, `workDir`, `allowFileEdits`, `model` | Codex call. Presets: `spark` (gpt-5.3-codex-spark, ultra-fast), `full` (gpt-5.4-codex, deep analysis) |
+| `codex` | `message`, `workDir`, `allowFileEdits`, `model` | Codex call. Presets: `spark` (gpt-5.3-codex-spark, xhigh reasoning), `smart` (gpt-5.4, high reasoning) |
 | `gemini` | `message`, `workDir`, `allowFileEdits`, `model` | Gemini call. Presets: `flash` (gemini-3-flash-preview), `pro` (gemini-3.1-pro-preview) |
 | `claude` | `message`, `workDir`, `allowFileEdits`, `model` | Claude call. Presets: `opus` (claude-opus-4-6), `sonnet` (claude-sonnet-4-6) |
 | `poll_events` | `agent`, `peek?` | Poll pending events from an agent |
@@ -53,7 +53,7 @@ Edit `config/settings.json` to customize:
 ```json
 {
   "codex": {
-    "model": "gpt-5.4-codex",
+    "model": "gpt-5.4",
     "reasoning": "xhigh"
   },
   "gemini": {
@@ -76,7 +76,7 @@ After changes, reconnect the MCP server in Claude Code:
 
 | Setting | Values | Description |
 |---------|--------|-------------|
-| `codex.model` | `gpt-5.4-codex`, `gpt-5.3-codex-spark` | Codex model |
+| `codex.model` | `gpt-5.4`, `gpt-5.3-codex-spark` | Codex model |
 | `codex.reasoning` | `xhigh`, `high`, `medium`, `low` | Reasoning effort level |
 | `gemini.model` | `gemini-3-flash-preview`, `gemini-3.1-pro-preview` | Gemini model |
 | `claude.model` | `claude-opus-4-6`, `claude-sonnet-4-6` | Claude model |

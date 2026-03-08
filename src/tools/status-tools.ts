@@ -19,10 +19,7 @@ import { getAllSessions, killSession } from "../core/tmux-manager";
 
 type AgentType =
 	| "codex_spark"
-	| "codex_xhigh"
-	| "codex_high"
-	| "codex_medium"
-	| "codex_low"
+	| "codex_smart"
 	| "gemini_flash"
 	| "gemini_pro"
 	| "claude_sonnet"
@@ -88,10 +85,7 @@ export const pollEventsTool = {
 				type: "string",
 				enum: [
 					"codex_spark",
-					"codex_xhigh",
-					"codex_high",
-					"codex_medium",
-					"codex_low",
+					"codex_smart",
 					"gemini_flash",
 					"gemini_pro",
 					"claude_sonnet",
@@ -120,10 +114,7 @@ export const waitForEventTool = {
 				type: "string",
 				enum: [
 					"codex_spark",
-					"codex_xhigh",
-					"codex_high",
-					"codex_medium",
-					"codex_low",
+					"codex_smart",
 					"gemini_flash",
 					"gemini_pro",
 					"claude_sonnet",
@@ -170,10 +161,7 @@ export const getAgentStatusTool = {
 				type: "string",
 				enum: [
 					"codex_spark",
-					"codex_xhigh",
-					"codex_high",
-					"codex_medium",
-					"codex_low",
+					"codex_smart",
 					"gemini_flash",
 					"gemini_pro",
 					"claude_sonnet",

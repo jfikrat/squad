@@ -4,7 +4,7 @@ import { AGENTS, CLAUDE_MODEL } from "../config/agents";
 export const claudeTool = {
 	name: "claude",
 	description:
-		"Claude Code for deep analysis, architecture review, debugging, and code review. Runs Claude in a persistent tmux session with full project context (CLAUDE.md). IMPORTANT: Always pass your current working directory (pwd) as workDir.",
+		"Claude Code for deep analysis, architecture review, and debugging. model MUST be 'opus' or 'sonnet' (do NOT use raw model names). Always pass pwd as workDir.",
 	inputSchema: {
 		type: "object",
 		properties: {
@@ -26,7 +26,7 @@ export const claudeTool = {
 				type: "string",
 				enum: ["opus", "sonnet"],
 				description:
-					"Model preset: 'opus' = claude-opus-4-6 (most capable — deep analysis, complex reasoning, architecture), 'sonnet' = claude-sonnet-4-6 (faster, efficient — most coding tasks).",
+					"Model preset (MUST be exactly one of the enum values, do NOT enter raw model names): 'opus' = most capable for deep analysis, 'sonnet' = faster for most coding tasks.",
 			},
 		},
 		required: ["message", "workDir", "allowFileEdits", "model"],

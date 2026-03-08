@@ -90,10 +90,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 				args as {
 					agent:
 						| "codex_spark"
-						| "codex_xhigh"
-						| "codex_high"
-						| "codex_medium"
-						| "codex_low"
+						| "codex_smart"
 						| "gemini_flash"
 						| "gemini_pro"
 						| "claude_sonnet"
@@ -107,10 +104,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 				args as {
 					agent:
 						| "codex_spark"
-						| "codex_xhigh"
-						| "codex_high"
-						| "codex_medium"
-						| "codex_low"
+						| "codex_smart"
 						| "gemini_flash"
 						| "gemini_pro"
 						| "claude_sonnet"
@@ -126,10 +120,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 				args as {
 					agent:
 						| "codex_spark"
-						| "codex_xhigh"
-						| "codex_high"
-						| "codex_medium"
-						| "codex_low"
+						| "codex_smart"
 						| "gemini_flash"
 						| "gemini_pro"
 						| "claude_sonnet"
