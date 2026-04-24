@@ -1,4 +1,5 @@
 import type { AgentConfig } from "../config/agents";
+import { handleAutoDismiss } from "../core/agent-ui";
 import {
 	findCodexResponseInRecentSessions,
 	generateCodexRequestId,
@@ -20,9 +21,11 @@ export interface CodexResult {
 	response?: string;
 	error?: string;
 	sessionName: string;
+	requestId?: string;
+	queued?: boolean;
 }
 
-interface PendingEvent {
+export interface PendingEvent {
 	type: "tool_complete" | "session_idle" | "message_complete" | "error";
 	timestamp: Date;
 	data?: string;
@@ -49,30 +52,20 @@ export async function initCodexSession(
 
 	return sessionName;
 }
-
-// Interactive prompts that need auto-dismiss (Enter to accept default)
-const AUTO_DISMISS_PATTERNS = [
-	"Use ↑/↓ to move",
-	"press enter to confirm",
-	"Choose how you'd like",
-	"Try new model",
-];
-
 async function waitForReady(
 	sessionName: string,
 	patterns: string[],
 ): Promise<void> {
 	while (true) {
 		const output = await capturePane(sessionName);
-
-		// Auto-dismiss interactive prompts (e.g. model upgrade)
-		for (const dismissPattern of AUTO_DISMISS_PATTERNS) {
-			if (output.includes(dismissPattern)) {
-				const { $ } = await import("bun");
-				await $`tmux send-keys -t ${sessionName} Enter`.quiet();
-				await Bun.sleep(1000);
-				break;
-			}
+		const autoDismissResult = await handleAutoDismiss(
+			configNameFromSession(sessionName),
+			sessionName,
+			output,
+		);
+		if (autoDismissResult.acted) {
+			await Bun.sleep(1000);
+			continue;
 		}
 
 		for (const pattern of patterns) {
@@ -91,8 +84,10 @@ export async function sendCodexPrompt(
 	workDir: string,
 	prompt: string,
 	allowFileEdits: boolean,
+	options?: { waitForResponse?: boolean },
 ): Promise<CodexResult> {
 	const sessionName = getSessionName(config.name);
+	const waitForResponse = options?.waitForResponse ?? true;
 
 	try {
 		// Session yoksa oluştur
@@ -112,6 +107,35 @@ export async function sendCodexPrompt(
 		// Prompt gönder (her zaman buffer kullan - daha güvenilir)
 		await sendBuffer(sessionName, fullPrompt);
 
+		if (!waitForResponse) {
+			void waitForCodexResponse(requestId, sessionName)
+				.then((response) => {
+					updateLastActivity(sessionName);
+					addEvent(config.name, {
+						type: "message_complete",
+						timestamp: new Date(),
+						data: response,
+					});
+				})
+				.catch((err) => {
+					const error = err as Error;
+					addEvent(config.name, {
+						type: "error",
+						timestamp: new Date(),
+						data: error.message,
+					});
+				});
+
+			updateLastActivity(sessionName);
+
+			return {
+				success: true,
+				sessionName,
+				requestId,
+				queued: true,
+			};
+		}
+
 		// Response bekle (JSON parsing)
 		const response = await waitForCodexResponse(requestId, sessionName);
 
@@ -129,6 +153,7 @@ export async function sendCodexPrompt(
 			success: true,
 			response,
 			sessionName,
+			requestId,
 		};
 	} catch (err) {
 		const error = err as Error;
@@ -165,8 +190,25 @@ async function waitForCodexResponse(
 			return response;
 		}
 
+		const output = await capturePane(sessionName, 120);
+		const autoDismissResult = await handleAutoDismiss(
+			configNameFromSession(sessionName),
+			sessionName,
+			output,
+		);
+		if (autoDismissResult.acted) {
+			await Bun.sleep(500);
+			continue;
+		}
+
 		await Bun.sleep(500);
 	}
+}
+
+function configNameFromSession(
+	sessionName: string,
+): "codex_medium" | "codex_xhigh" {
+	return sessionName.includes("codex_medium") ? "codex_medium" : "codex_xhigh";
 }
 
 export async function stopCodexSession(config: AgentConfig): Promise<void> {
@@ -188,6 +230,29 @@ export function pollEvents(agentName: string, peek = false): PendingEvent[] {
 		pendingEvents.set(agentName, []);
 	}
 	return events;
+}
+
+export function consumeEvent(
+	agentName: string,
+	eventType?: PendingEvent["type"],
+): PendingEvent | undefined {
+	const events = pendingEvents.get(agentName) || [];
+	if (events.length === 0) {
+		return undefined;
+	}
+
+	const index =
+		eventType === undefined
+			? 0
+			: events.findIndex((event) => event.type === eventType);
+
+	if (index < 0) {
+		return undefined;
+	}
+
+	const [event] = events.splice(index, 1);
+	pendingEvents.set(agentName, events);
+	return event;
 }
 
 export function getCodexStatus(config: AgentConfig): {

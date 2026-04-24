@@ -48,6 +48,8 @@ export const AGENTS: Record<string, AgentConfig> = {
 		command: ["codex", "--dangerously-bypass-approvals-and-sandbox"],
 		safePrefix: null,
 		readyPatterns: [
+			"model:",
+			"directory:",
 			"% left",
 			"? for shortcuts",
 			"context left",
@@ -71,7 +73,7 @@ export const MAX_PARALLEL_SEARCH = 5;
 // Codex model ve reasoning effort
 // Öncelik: ENV > settings.json > default
 export const CODEX_MODEL =
-	process.env.SQUAD_CODEX_MODEL || settings.codex?.model || "gpt-5.4";
+	process.env.SQUAD_CODEX_MODEL || settings.codex?.model || "gpt-5.5";
 
 export type ReasoningEffort = "xhigh" | "high" | "medium" | "low";
 export const CODEX_REASONING: ReasoningEffort =

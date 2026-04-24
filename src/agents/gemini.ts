@@ -1,4 +1,5 @@
 import type { AgentConfig } from "../config/agents";
+import { handleAutoDismiss } from "../core/agent-ui";
 import {
 	findResponseByRequestId,
 	generateRequestId,
@@ -22,9 +23,11 @@ export interface GeminiResult {
 	response?: string;
 	error?: string;
 	sessionName: string;
+	requestId?: string;
+	queued?: boolean;
 }
 
-interface PendingEvent {
+export interface PendingEvent {
 	type: "tool_complete" | "session_idle" | "message_complete" | "error";
 	timestamp: Date;
 	data?: string;
@@ -58,6 +61,15 @@ async function waitForReady(
 ): Promise<void> {
 	while (true) {
 		const output = await capturePane(sessionName);
+		const autoDismissResult = await handleAutoDismiss(
+			configNameFromSession(sessionName),
+			sessionName,
+			output,
+		);
+		if (autoDismissResult.acted) {
+			await Bun.sleep(1000);
+			continue;
+		}
 
 		for (const pattern of patterns) {
 			if (output.includes(pattern)) {
@@ -74,8 +86,10 @@ export async function sendGeminiPrompt(
 	config: AgentConfig,
 	workDir: string,
 	prompt: string,
+	options?: { waitForResponse?: boolean },
 ): Promise<GeminiResult> {
 	const sessionName = getSessionName(config.name);
+	const waitForResponse = options?.waitForResponse ?? true;
 
 	try {
 		// Session yoksa oluştur
@@ -103,7 +117,40 @@ export async function sendGeminiPrompt(
 		await sendBuffer(sessionName, fullPrompt);
 
 		// Response bekle (önce JSON, fallback tmux)
-		const response = await waitForResponse(sessionName, requestId, workDir);
+		if (!waitForResponse) {
+			void waitForResponseByRequestId(sessionName, requestId, workDir)
+				.then((response) => {
+					updateLastActivity(sessionName);
+					addEvent(config.name, {
+						type: "message_complete",
+						timestamp: new Date(),
+						data: response,
+					});
+				})
+				.catch((err) => {
+					const error = err as Error;
+					addEvent(config.name, {
+						type: "error",
+						timestamp: new Date(),
+						data: error.message,
+					});
+				});
+
+			updateLastActivity(sessionName);
+
+			return {
+				success: true,
+				sessionName,
+				requestId,
+				queued: true,
+			};
+		}
+
+		const response = await waitForResponseByRequestId(
+			sessionName,
+			requestId,
+			workDir,
+		);
 
 		// Cevap alındı, lastActivity güncelle
 		updateLastActivity(sessionName);
@@ -119,6 +166,7 @@ export async function sendGeminiPrompt(
 			success: true,
 			response,
 			sessionName,
+			requestId,
 		};
 	} catch (err) {
 		const error = err as Error;
@@ -137,7 +185,7 @@ export async function sendGeminiPrompt(
 	}
 }
 
-async function waitForResponse(
+async function waitForResponseByRequestId(
 	sessionName: string,
 	requestId: string,
 	workDir: string,
@@ -161,8 +209,25 @@ async function waitForResponse(
 			}
 		}
 
+		const output = await capturePane(sessionName, 120);
+		const autoDismissResult = await handleAutoDismiss(
+			configNameFromSession(sessionName),
+			sessionName,
+			output,
+		);
+		if (autoDismissResult.acted) {
+			await Bun.sleep(500);
+			continue;
+		}
+
 		await Bun.sleep(500);
 	}
+}
+
+function configNameFromSession(
+	sessionName: string,
+): "gemini_flash" | "gemini_pro" {
+	return sessionName.includes("gemini_pro") ? "gemini_pro" : "gemini_flash";
 }
 
 export async function stopGeminiSession(config: AgentConfig): Promise<void> {
@@ -184,6 +249,29 @@ export function pollEvents(agentName: string, peek = false): PendingEvent[] {
 		pendingEvents.set(agentName, []);
 	}
 	return events;
+}
+
+export function consumeEvent(
+	agentName: string,
+	eventType?: PendingEvent["type"],
+): PendingEvent | undefined {
+	const events = pendingEvents.get(agentName) || [];
+	if (events.length === 0) {
+		return undefined;
+	}
+
+	const index =
+		eventType === undefined
+			? 0
+			: events.findIndex((event) => event.type === eventType);
+
+	if (index < 0) {
+		return undefined;
+	}
+
+	const [event] = events.splice(index, 1);
+	pendingEvents.set(agentName, events);
+	return event;
 }
 
 export function getGeminiStatus(config: AgentConfig): {

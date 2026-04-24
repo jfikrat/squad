@@ -1,5 +1,5 @@
 import { sendClaudePrompt } from "../agents/claude";
-import { AGENTS, CLAUDE_MODEL } from "../config/agents";
+import { AGENTS } from "../config/agents";
 
 export const claudeTool = {
 	name: "claude",
@@ -22,6 +22,16 @@ export const claudeTool = {
 				description:
 					"Allow the agent to create, modify, and delete files. Must be explicitly set.",
 			},
+			waitForResponse: {
+				type: "boolean",
+				description:
+					"Whether to block until the full response is ready. Default: true. Set false to return immediately — result will be written to outputFile if provided.",
+			},
+			outputFile: {
+				type: "string",
+				description:
+					"Absolute path to write the result when the worker finishes. Used with waitForResponse: false for file-based async handoff. The directory will be created if needed.",
+			},
 			model: {
 				type: "string",
 				enum: ["opus", "sonnet"],
@@ -43,6 +53,8 @@ export async function handleClaude(args: {
 	workDir: string;
 	allowFileEdits: boolean;
 	model: string;
+	waitForResponse?: boolean;
+	outputFile?: string;
 }): Promise<{ content: Array<{ type: string; text: string }> }> {
 	const effectiveModel = CLAUDE_MODEL_PRESETS[args.model];
 	if (!effectiveModel) {
@@ -68,9 +80,23 @@ export async function handleClaude(args: {
 		args.workDir,
 		args.message,
 		args.allowFileEdits,
+		{ waitForResponse: args.waitForResponse, outputFile: args.outputFile },
 	);
 
 	if (result.success) {
+		if (result.queued) {
+			const info: Record<string, unknown> = {
+				status: "dispatched",
+				agent: config.name,
+				requestId: result.requestId,
+				outputFile: result.outputFile,
+				nextStep: `Result will be written to ${result.outputFile} when complete.`,
+			};
+			return {
+				content: [{ type: "text", text: JSON.stringify(info, null, 2) }],
+			};
+		}
+
 		return {
 			content: [
 				{

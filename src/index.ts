@@ -11,14 +11,27 @@ import { getAllSessions, killSession } from "./core/tmux-manager";
 // Tool definitions
 import { claudeTool, handleClaude } from "./tools/claude-tools";
 import { codexTool, handleCodex } from "./tools/codex-tools";
+import {
+	continueAgentTool,
+	handleContinueAgent,
+} from "./tools/conversation-tools";
 import { geminiTool, handleGemini } from "./tools/gemini-tools";
+import { taskGraphTool, handleTaskGraph } from "./tools/graph-tools";
 import {
 	cleanupTool,
+	getAgentOutputTool,
+	getAgentStateTool,
 	getAgentStatusTool,
 	handleCleanup,
+	handleGetAgentOutput,
+	handleGetAgentState,
 	handleGetAgentStatus,
+	handleListAgents,
+	handleListSessions,
 	handlePollEvents,
 	handleWaitForEvent,
+	listAgentsTool,
+	listSessionsTool,
 	pollEventsTool,
 	waitForEventTool,
 } from "./tools/status-tools";
@@ -42,10 +55,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 			codexTool,
 			geminiTool,
 			claudeTool,
+			continueAgentTool,
 			pollEventsTool,
 			waitForEventTool,
 			getAgentStatusTool,
 			cleanupTool,
+			listAgentsTool,
+			listSessionsTool,
+			getAgentStateTool,
+			getAgentOutputTool,
+			taskGraphTool,
 		],
 	};
 });
@@ -62,6 +81,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 					workDir: string;
 					allowFileEdits: boolean;
 					model: string;
+					waitForResponse?: boolean;
 				},
 			);
 
@@ -72,6 +92,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 					workDir: string;
 					allowFileEdits: boolean;
 					model: string;
+					waitForResponse?: boolean;
 				},
 			);
 
@@ -85,12 +106,62 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 				},
 			);
 
+		case "continue_agent":
+			return handleContinueAgent(
+				args as {
+					agent:
+						| "codex_medium"
+						| "codex_xhigh"
+						| "gemini_flash"
+						| "gemini_pro"
+						| "claude_sonnet"
+						| "claude_opus";
+					message: string;
+					allowFileEdits: boolean;
+					waitForResponse?: boolean;
+				},
+			);
+
+		case "list_agents":
+			return handleListAgents();
+
+		case "list_sessions":
+			return handleListSessions();
+
+		case "get_agent_output":
+			return handleGetAgentOutput(
+				args as {
+					agent:
+						| "codex_medium"
+						| "codex_xhigh"
+						| "gemini_flash"
+						| "gemini_pro"
+						| "claude_sonnet"
+						| "claude_opus";
+					lines?: number;
+				},
+			);
+
+		case "get_agent_state":
+			return handleGetAgentState(
+				args as {
+					agent:
+						| "codex_medium"
+						| "codex_xhigh"
+						| "gemini_flash"
+						| "gemini_pro"
+						| "claude_sonnet"
+						| "claude_opus";
+					lines?: number;
+				},
+			);
+
 		case "poll_events":
 			return handlePollEvents(
 				args as {
 					agent:
-						| "codex_spark"
-						| "codex_smart"
+						| "codex_medium"
+						| "codex_xhigh"
 						| "gemini_flash"
 						| "gemini_pro"
 						| "claude_sonnet"
@@ -103,13 +174,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 			return handleWaitForEvent(
 				args as {
 					agent:
-						| "codex_spark"
-						| "codex_smart"
+						| "codex_medium"
+						| "codex_xhigh"
 						| "gemini_flash"
 						| "gemini_pro"
 						| "claude_sonnet"
 						| "claude_opus";
-					eventType: string;
+					eventType:
+						| "tool_complete"
+						| "session_idle"
+						| "message_complete"
+						| "error";
 					timeoutMs?: number;
 					pollIntervalMs?: number;
 				},
@@ -119,8 +194,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 			return handleGetAgentStatus(
 				args as {
 					agent:
-						| "codex_spark"
-						| "codex_smart"
+						| "codex_medium"
+						| "codex_xhigh"
 						| "gemini_flash"
 						| "gemini_pro"
 						| "claude_sonnet"
@@ -130,6 +205,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 		case "cleanup":
 			return handleCleanup();
+
+		case "task_graph":
+			return handleTaskGraph(
+				args as {
+					name: string;
+					workDir: string;
+					outputFile?: string;
+					maxConcurrency?: number;
+					tasks: Array<{
+						id: string;
+						message: string;
+						model: "sonnet" | "opus";
+						dependsOn: string[];
+						allowFileEdits?: boolean;
+					}>;
+				},
+			);
 
 		default:
 			throw new Error(`Unknown tool: ${name}`);

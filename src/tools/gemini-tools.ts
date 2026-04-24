@@ -29,6 +29,11 @@ export const geminiTool = {
 				description:
 					"Allow the agent to create, modify, and delete files. Must be explicitly set.",
 			},
+			waitForResponse: {
+				type: "boolean",
+				description:
+					"Whether to block until the full response is ready. Default: true. Set false to return immediately and collect the result via poll_events/wait_for_event.",
+			},
 		},
 		required: ["message", "workDir", "allowFileEdits", "model"],
 	},
@@ -63,6 +68,7 @@ export async function handleGemini(args: {
 	workDir: string;
 	model: string;
 	allowFileEdits: boolean;
+	waitForResponse?: boolean;
 }): Promise<{ content: Array<{ type: string; text: string }> }> {
 	const model = GEMINI_MODEL_PRESETS[args.model];
 	if (!model) {
@@ -76,9 +82,34 @@ export async function handleGemini(args: {
 		};
 	}
 	const config = getGeminiConfig(model);
-	const result = await sendGeminiPrompt(config, args.workDir, args.message);
+	const result = await sendGeminiPrompt(config, args.workDir, args.message, {
+		waitForResponse: args.waitForResponse,
+	});
 
 	if (result.success) {
+		if (result.queued) {
+			return {
+				content: [
+					{
+						type: "text",
+						text: JSON.stringify(
+							{
+								success: true,
+								queued: true,
+								agent: config.name,
+								sessionName: result.sessionName,
+								requestId: result.requestId,
+								nextStep:
+									"Use wait_for_event(agent, 'message_complete') or poll_events(agent) to collect the response.",
+							},
+							null,
+							2,
+						),
+					},
+				],
+			};
+		}
+
 		return {
 			content: [
 				{ type: "text", text: result.response || "No response received" },

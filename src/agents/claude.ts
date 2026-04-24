@@ -1,4 +1,7 @@
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, join } from "node:path";
 import type { AgentConfig } from "../config/agents";
+import { handleAutoDismiss } from "../core/agent-ui";
 import {
 	findClaudeResponseByRequestId,
 	generateClaudeRequestId,
@@ -21,9 +24,12 @@ export interface ClaudeResult {
 	response?: string;
 	error?: string;
 	sessionName: string;
+	requestId?: string;
+	queued?: boolean;
+	outputFile?: string;
 }
 
-interface PendingEvent {
+export interface PendingEvent {
 	type: "tool_complete" | "session_idle" | "message_complete" | "error";
 	timestamp: Date;
 	data?: string;
@@ -57,6 +63,15 @@ async function waitForReady(
 ): Promise<void> {
 	while (true) {
 		const output = await capturePane(sessionName);
+		const autoDismissResult = await handleAutoDismiss(
+			configNameFromSession(sessionName),
+			sessionName,
+			output,
+		);
+		if (autoDismissResult.acted) {
+			await Bun.sleep(1000);
+			continue;
+		}
 
 		for (const pattern of patterns) {
 			if (output.includes(pattern)) {
@@ -74,17 +89,33 @@ export async function sendClaudePrompt(
 	workDir: string,
 	prompt: string,
 	allowFileEdits: boolean,
+	options?: { waitForResponse?: boolean; outputFile?: string },
 ): Promise<ClaudeResult> {
-	const sessionName = getSessionName(config.name);
+	const waitForResponse = options?.waitForResponse ?? true;
+	const requestId = generateClaudeRequestId();
+
+	// Async mode: unique session per dispatch so multiple workers can run in parallel
+	// Sync mode: reuse the shared session (interactive conversation)
+	const effectiveConfig = !waitForResponse
+		? { ...config, name: `${config.name}_${requestId}` }
+		: config;
+	const sessionName = getSessionName(effectiveConfig.name);
+
+	// Resolve outputFile: relative paths become workDir-relative,
+	// if async with no outputFile, auto-generate under .squad/results/
+	let outputFile = options?.outputFile;
+	if (outputFile && !isAbsolute(outputFile)) {
+		outputFile = join(workDir, outputFile);
+	}
+	if (!waitForResponse && !outputFile) {
+		outputFile = join(workDir, ".squad", "results", `${requestId}.md`);
+	}
 
 	try {
 		// Session yoksa oluştur
 		if (!(await hasSession(sessionName))) {
-			await initClaudeSession(config, workDir);
+			await initClaudeSession(effectiveConfig, workDir);
 		}
-
-		// Request ID üret
-		const requestId = generateClaudeRequestId();
 
 		// Prompt'a request ID ve ANS talimatı ekle
 		// Newline'ları kaldır: Claude Code multiline paste'te Enter submit yerine newline ekler
@@ -96,6 +127,44 @@ export async function sendClaudePrompt(
 
 		// Chunked send-keys ile gönder (paste detection bypass)
 		await sendBufferNoBracket(sessionName, fullPrompt);
+
+		if (!waitForResponse) {
+			void waitForClaudeResponse(requestId, sessionName, workDir)
+				.then(async (response) => {
+					addEvent(config.name, {
+						type: "message_complete",
+						timestamp: new Date(),
+						data: response,
+					});
+					if (outputFile) {
+						writeOutputFile(outputFile, requestId, response);
+					}
+					// Async workers get their own session — kill it when done
+					await killSession(sessionName);
+				})
+				.catch(async (err) => {
+					const error = err as Error;
+					addEvent(config.name, {
+						type: "error",
+						timestamp: new Date(),
+						data: error.message,
+					});
+					if (outputFile) {
+						writeOutputFile(outputFile, requestId, null, error.message);
+					}
+					await killSession(sessionName);
+				});
+
+			updateLastActivity(sessionName);
+
+			return {
+				success: true,
+				sessionName,
+				requestId,
+				queued: true,
+				outputFile,
+			};
+		}
 
 		// Response bekle (JSONL parsing)
 		const response = await waitForClaudeResponse(
@@ -118,6 +187,7 @@ export async function sendClaudePrompt(
 			success: true,
 			response,
 			sessionName,
+			requestId,
 		};
 	} catch (err) {
 		const error = err as Error;
@@ -162,8 +232,50 @@ async function waitForClaudeResponse(
 			}
 		}
 
+		const output = await capturePane(sessionName, 120);
+		const autoDismissResult = await handleAutoDismiss(
+			configNameFromSession(sessionName),
+			sessionName,
+			output,
+		);
+		if (autoDismissResult.acted) {
+			await Bun.sleep(500);
+			continue;
+		}
+
 		await Bun.sleep(500);
 	}
+}
+
+function writeOutputFile(
+	filePath: string,
+	requestId: string,
+	response: string | null,
+	error?: string,
+): void {
+	try {
+		mkdirSync(dirname(filePath), { recursive: true });
+		const ts = new Date().toISOString();
+		if (error) {
+			writeFileSync(
+				filePath,
+				`---\nrequestId: ${requestId}\nstatus: error\ntimestamp: ${ts}\n---\n\n${error}\n`,
+			);
+		} else {
+			writeFileSync(
+				filePath,
+				`---\nrequestId: ${requestId}\nstatus: done\ntimestamp: ${ts}\n---\n\n${response}\n`,
+			);
+		}
+	} catch {
+		// best-effort — don't crash the background handler
+	}
+}
+
+function configNameFromSession(
+	sessionName: string,
+): "claude_sonnet" | "claude_opus" {
+	return sessionName.includes("claude_opus") ? "claude_opus" : "claude_sonnet";
 }
 
 export async function stopClaudeSession(config: AgentConfig): Promise<void> {
@@ -185,6 +297,29 @@ export function pollEvents(agentName: string, peek = false): PendingEvent[] {
 		pendingEvents.set(agentName, []);
 	}
 	return events;
+}
+
+export function consumeEvent(
+	agentName: string,
+	eventType?: PendingEvent["type"],
+): PendingEvent | undefined {
+	const events = pendingEvents.get(agentName) || [];
+	if (events.length === 0) {
+		return undefined;
+	}
+
+	const index =
+		eventType === undefined
+			? 0
+			: events.findIndex((event) => event.type === eventType);
+
+	if (index < 0) {
+		return undefined;
+	}
+
+	const [event] = events.splice(index, 1);
+	pendingEvents.set(agentName, events);
+	return event;
 }
 
 export function getClaudeStatus(config: AgentConfig): {

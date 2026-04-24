@@ -1,77 +1,58 @@
 import {
+	consumeEvent as consumeClaudeEvent,
 	getClaudeStatus,
 	pollEvents as pollClaudeEvents,
 } from "../agents/claude";
-import { getCodexStatus, pollEvents as pollCodexEvents } from "../agents/codex";
 import {
+	consumeEvent as consumeCodexEvent,
+	getCodexStatus,
+	pollEvents as pollCodexEvents,
+} from "../agents/codex";
+import {
+	consumeEvent as consumeGeminiEvent,
 	getGeminiStatus,
 	pollEvents as pollGeminiEvents,
 } from "../agents/gemini";
 import type { AgentConfig } from "../config/agents";
+import { CLAUDE_MODEL, CODEX_MODEL, GEMINI_MODEL } from "../config/agents";
 import {
-	AGENTS,
-	CLAUDE_MODEL,
-	CODEX_MODEL,
-	GEMINI_MODEL,
-} from "../config/agents";
+	AVAILABLE_AGENTS,
+	type AgentType,
+	type EventType,
+	resolveAgentConfig,
+} from "../core/agent-presets";
+import { summarizeAgentOutput } from "../core/agent-state";
 import { INSTANCE_ID } from "../core/instance";
-import { getAllSessions, killSession } from "../core/tmux-manager";
+import { capturePane, getAllSessions, killSession } from "../core/tmux-manager";
 
-type AgentType =
-	| "codex_spark"
-	| "codex_smart"
-	| "gemini_flash"
-	| "gemini_pro"
-	| "claude_sonnet"
-	| "claude_opus";
-
-function getCodexConfig(agentName: string): AgentConfig | null {
-	if (!agentName.startsWith("codex_")) return null;
-	const effort = agentName.replace("codex_", "");
-	const base = AGENTS.codex;
-	return {
-		...base,
-		name: agentName,
-		command: [
-			...base.command,
-			"-m",
-			CODEX_MODEL,
-			"-c",
-			`model_reasoning_effort="${effort}"`,
-		],
-	};
+function getAgentEvents(agent: AgentType, peek = false) {
+	if (agent.startsWith("codex_")) {
+		return pollCodexEvents(agent, peek);
+	}
+	if (agent.startsWith("claude_")) {
+		return pollClaudeEvents(agent, peek);
+	}
+	return pollGeminiEvents(agent, peek);
 }
 
-function getGeminiConfig(agentName: string): AgentConfig | null {
-	if (!agentName.startsWith("gemini_")) return null;
-	const modelType = agentName.replace("gemini_", "");
-	const modelId =
-		modelType === "flash"
-			? "gemini-3-flash-preview"
-			: modelType === "pro"
-				? "gemini-3-pro-preview"
-				: GEMINI_MODEL;
-	const base = AGENTS.gemini;
-	return {
-		...base,
-		name: agentName,
-		command: [
-			...base.command.slice(0, 1),
-			"-m",
-			modelId,
-			...base.command.slice(1),
-		],
-	};
+function consumeAgentEvent(agent: AgentType, eventType?: EventType) {
+	if (agent.startsWith("codex_")) {
+		return consumeCodexEvent(agent, eventType);
+	}
+	if (agent.startsWith("claude_")) {
+		return consumeClaudeEvent(agent, eventType);
+	}
+	return consumeGeminiEvent(agent, eventType);
 }
 
-function getClaudeConfig(agentName: string): AgentConfig | null {
-	if (!agentName.startsWith("claude_")) return null;
-	const base = AGENTS.claude;
-	return {
-		...base,
-		name: agentName,
-		command: [...base.command, "--model", CLAUDE_MODEL],
-	};
+function getAgentStatusSnapshot(agent: AgentType, config: AgentConfig) {
+	if (agent.startsWith("codex_")) {
+		return getCodexStatus(config);
+	}
+	if (agent.startsWith("claude_")) {
+		return getClaudeStatus(config);
+	}
+	return getGeminiStatus(config);
 }
 
 export const pollEventsTool = {
@@ -83,14 +64,7 @@ export const pollEventsTool = {
 		properties: {
 			agent: {
 				type: "string",
-				enum: [
-					"codex_spark",
-					"codex_smart",
-					"gemini_flash",
-					"gemini_pro",
-					"claude_sonnet",
-					"claude_opus",
-				],
+				enum: [...AVAILABLE_AGENTS],
 				description: "Which agent to poll events from",
 			},
 			peek: {
@@ -112,14 +86,7 @@ export const waitForEventTool = {
 		properties: {
 			agent: {
 				type: "string",
-				enum: [
-					"codex_spark",
-					"codex_smart",
-					"gemini_flash",
-					"gemini_pro",
-					"claude_sonnet",
-					"claude_opus",
-				],
+				enum: [...AVAILABLE_AGENTS],
 				description: "Which agent to wait for",
 			},
 			eventType: {
@@ -159,15 +126,70 @@ export const getAgentStatusTool = {
 		properties: {
 			agent: {
 				type: "string",
-				enum: [
-					"codex_spark",
-					"codex_smart",
-					"gemini_flash",
-					"gemini_pro",
-					"claude_sonnet",
-					"claude_opus",
-				],
+				enum: [...AVAILABLE_AGENTS],
 				description: "Which agent to check status for",
+			},
+		},
+		required: ["agent"],
+	},
+};
+
+export const listAgentsTool = {
+	name: "list_agents",
+	description:
+		"List all available agent presets with live connection state, pending events, and effective command/model details.",
+	inputSchema: {
+		type: "object",
+		properties: {},
+	},
+};
+
+export const listSessionsTool = {
+	name: "list_sessions",
+	description:
+		"List active tmux sessions owned by this MCP instance with workDir and activity timestamps.",
+	inputSchema: {
+		type: "object",
+		properties: {},
+	},
+};
+
+export const getAgentStateTool = {
+	name: "get_agent_state",
+	description:
+		"Summarize an agent's live tmux pane into a semantic state such as awaiting confirmation, responding, or ready for input.",
+	inputSchema: {
+		type: "object",
+		properties: {
+			agent: {
+				type: "string",
+				enum: [...AVAILABLE_AGENTS],
+				description: "Which agent to summarize",
+			},
+			lines: {
+				type: "number",
+				description: "How many recent pane lines to inspect. Default: 120",
+			},
+		},
+		required: ["agent"],
+	},
+};
+
+export const getAgentOutputTool = {
+	name: "get_agent_output",
+	description:
+		"Capture the recent tmux pane output for an agent to debug readiness prompts, stalls, or unexpected UI state.",
+	inputSchema: {
+		type: "object",
+		properties: {
+			agent: {
+				type: "string",
+				enum: [...AVAILABLE_AGENTS],
+				description: "Which agent to inspect",
+			},
+			lines: {
+				type: "number",
+				description: "How many recent pane lines to capture. Default: 200",
 			},
 		},
 		required: ["agent"],
@@ -179,20 +201,7 @@ export async function handlePollEvents(args: {
 	peek?: boolean;
 }): Promise<{ content: Array<{ type: string; text: string }> }> {
 	const { agent, peek = false } = args;
-
-	let events: Array<{
-		type: string;
-		timestamp: Date;
-		data?: string;
-	}>;
-
-	if (agent.startsWith("codex_")) {
-		events = pollCodexEvents(agent, peek);
-	} else if (agent.startsWith("claude_")) {
-		events = pollClaudeEvents(agent, peek);
-	} else {
-		events = pollGeminiEvents(agent, peek);
-	}
+	const events = getAgentEvents(agent, peek);
 
 	return {
 		content: [
@@ -218,7 +227,7 @@ export async function handlePollEvents(args: {
 
 export async function handleWaitForEvent(args: {
 	agent: AgentType;
-	eventType: string;
+	eventType: EventType;
 	timeoutMs?: number;
 	pollIntervalMs?: number;
 }): Promise<{ content: Array<{ type: string; text: string }> }> {
@@ -227,31 +236,13 @@ export async function handleWaitForEvent(args: {
 	const startTime = Date.now();
 
 	while (Date.now() - startTime < timeoutMs) {
-		let events: Array<{
-			type: string;
-			timestamp: Date;
-			data?: string;
-		}>;
-
-		if (agent.startsWith("codex_")) {
-			events = pollCodexEvents(agent, true); // peek mode
-		} else if (agent.startsWith("claude_")) {
-			events = pollClaudeEvents(agent, true);
-		} else {
-			events = pollGeminiEvents(agent, true);
-		}
+		const events = getAgentEvents(agent, true);
 
 		const matchingEvent = events.find((e) => e.type === eventType);
 
 		if (matchingEvent) {
-			// Event'i consume et
-			if (agent.startsWith("codex_")) {
-				pollCodexEvents(agent, false);
-			} else if (agent.startsWith("claude_")) {
-				pollClaudeEvents(agent, false);
-			} else {
-				pollGeminiEvents(agent, false);
-			}
+			const consumedEvent =
+				consumeAgentEvent(agent, eventType) || matchingEvent;
 
 			return {
 				content: [
@@ -261,9 +252,9 @@ export async function handleWaitForEvent(args: {
 							{
 								success: true,
 								event: {
-									type: matchingEvent.type,
-									timestamp: matchingEvent.timestamp.toISOString(),
-									data: matchingEvent.data,
+									type: consumedEvent.type,
+									timestamp: consumedEvent.timestamp.toISOString(),
+									data: consumedEvent.data,
 								},
 							},
 							null,
@@ -298,18 +289,7 @@ export async function handleGetAgentStatus(args: {
 	agent: AgentType;
 }): Promise<{ content: Array<{ type: string; text: string }> }> {
 	const { agent } = args;
-
-	let config: AgentConfig | null | undefined;
-
-	if (agent.startsWith("codex_")) {
-		config = getCodexConfig(agent);
-	} else if (agent.startsWith("gemini_")) {
-		config = getGeminiConfig(agent);
-	} else if (agent.startsWith("claude_")) {
-		config = getClaudeConfig(agent);
-	} else {
-		config = AGENTS[agent];
-	}
+	const config = resolveAgentConfig(agent);
 
 	if (!config) {
 		return {
@@ -322,19 +302,11 @@ export async function handleGetAgentStatus(args: {
 		};
 	}
 
-	let status: {
-		connected: boolean;
-		sessionName: string;
-		lastActivity?: Date;
-		pendingEvents: number;
-	};
-
-	if (agent.startsWith("codex_")) {
-		status = getCodexStatus(config);
-	} else if (agent.startsWith("claude_")) {
-		status = getClaudeStatus(config);
-	} else {
-		status = getGeminiStatus(config);
+	const status = getAgentStatusSnapshot(agent, config);
+	let state = null;
+	if (status.connected) {
+		const output = await capturePane(status.sessionName, 120);
+		state = summarizeAgentOutput(agent, output);
 	}
 
 	return {
@@ -348,10 +320,224 @@ export async function handleGetAgentStatus(args: {
 						sessionName: status.sessionName,
 						lastActivity: status.lastActivity?.toISOString() || null,
 						pendingEvents: status.pendingEvents,
+						state,
 						config: {
 							command: config.command.join(" "),
 							responseDetection: config.responseDetection,
 						},
+					},
+					null,
+					2,
+				),
+			},
+		],
+	};
+}
+
+export async function handleListAgents(): Promise<{
+	content: Array<{ type: string; text: string }>;
+}> {
+	const agents = [];
+	for (const agent of AVAILABLE_AGENTS) {
+		const config = resolveAgentConfig(agent);
+		if (!config) {
+			agents.push({
+				agent,
+				error: "Missing config",
+			});
+			continue;
+		}
+
+		const status = getAgentStatusSnapshot(agent, config);
+		let state = null;
+		if (status.connected) {
+			const output = await capturePane(status.sessionName, 80);
+			state = summarizeAgentOutput(agent, output);
+		}
+		agents.push({
+			agent,
+			connected: status.connected,
+			sessionName: status.sessionName,
+			lastActivity: status.lastActivity?.toISOString() || null,
+			pendingEvents: status.pendingEvents,
+			statePhase: state?.phase || null,
+			stateSummary: state?.summary || null,
+			command: config.command.join(" "),
+			responseDetection: config.responseDetection,
+			configuredDefaultModel: agent.startsWith("codex_")
+				? CODEX_MODEL
+				: agent.startsWith("gemini_")
+					? GEMINI_MODEL
+					: CLAUDE_MODEL,
+			defaultModel: agent.startsWith("codex_")
+				? config.command[config.command.indexOf("-m") + 1]
+				: agent.startsWith("gemini_")
+					? config.command[config.command.indexOf("-m") + 1]
+					: config.command[config.command.indexOf("--model") + 1],
+		});
+	}
+
+	return {
+		content: [
+			{
+				type: "text",
+				text: JSON.stringify(
+					{
+						instanceId: INSTANCE_ID,
+						agentCount: agents.length,
+						agents,
+					},
+					null,
+					2,
+				),
+			},
+		],
+	};
+}
+
+export async function handleListSessions(): Promise<{
+	content: Array<{ type: string; text: string }>;
+}> {
+	const sessions = getAllSessions().map((session) => ({
+		name: session.name,
+		workDir: session.workDir,
+		createdAt: session.createdAt.toISOString(),
+		lastActivity: session.lastActivity.toISOString(),
+	}));
+
+	return {
+		content: [
+			{
+				type: "text",
+				text: JSON.stringify(
+					{
+						instanceId: INSTANCE_ID,
+						sessionCount: sessions.length,
+						sessions,
+					},
+					null,
+					2,
+				),
+			},
+		],
+	};
+}
+
+export async function handleGetAgentState(args: {
+	agent: AgentType;
+	lines?: number;
+}): Promise<{ content: Array<{ type: string; text: string }> }> {
+	const { agent, lines = 120 } = args;
+	const config = resolveAgentConfig(agent);
+
+	if (!config) {
+		return {
+			content: [
+				{
+					type: "text",
+					text: JSON.stringify({ error: `Unknown agent: ${agent}` }, null, 2),
+				},
+			],
+		};
+	}
+
+	const status = getAgentStatusSnapshot(agent, config);
+	if (!status.connected) {
+		return {
+			content: [
+				{
+					type: "text",
+					text: JSON.stringify(
+						{
+							agent,
+							connected: false,
+							sessionName: status.sessionName,
+							error: "Agent session is not currently connected",
+						},
+						null,
+						2,
+					),
+				},
+			],
+		};
+	}
+
+	const output = await capturePane(status.sessionName, lines);
+	const state = summarizeAgentOutput(agent, output);
+
+	return {
+		content: [
+			{
+				type: "text",
+				text: JSON.stringify(
+					{
+						agent,
+						sessionName: status.sessionName,
+						lastActivity: status.lastActivity?.toISOString() || null,
+						lines,
+						state,
+					},
+					null,
+					2,
+				),
+			},
+		],
+	};
+}
+
+export async function handleGetAgentOutput(args: {
+	agent: AgentType;
+	lines?: number;
+}): Promise<{ content: Array<{ type: string; text: string }> }> {
+	const { agent, lines = 200 } = args;
+	const config = resolveAgentConfig(agent);
+
+	if (!config) {
+		return {
+			content: [
+				{
+					type: "text",
+					text: JSON.stringify({ error: `Unknown agent: ${agent}` }, null, 2),
+				},
+			],
+		};
+	}
+
+	const status = getAgentStatusSnapshot(agent, config);
+	if (!status.connected) {
+		return {
+			content: [
+				{
+					type: "text",
+					text: JSON.stringify(
+						{
+							agent,
+							connected: false,
+							sessionName: status.sessionName,
+							error: "Agent session is not currently connected",
+						},
+						null,
+						2,
+					),
+				},
+			],
+		};
+	}
+
+	const output = await capturePane(status.sessionName, lines);
+	const state = summarizeAgentOutput(agent, output);
+	return {
+		content: [
+			{
+				type: "text",
+				text: JSON.stringify(
+					{
+						agent,
+						sessionName: status.sessionName,
+						lines,
+						lastActivity: status.lastActivity?.toISOString() || null,
+						state,
+						output,
 					},
 					null,
 					2,

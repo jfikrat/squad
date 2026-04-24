@@ -12,7 +12,9 @@ One prompt. Multiple AI perspectives. All in your terminal.
 - **tmux-based** — Each agent runs in its own tmux session, visible in real-time
 - **Pane layout** — Agents auto-arrange as tmux panes alongside Claude Code
 - **Instance isolation** — Multiple Claude Code sessions don't interfere with each other
-- **Model presets** — Simple preset names (spark/full, flash/pro, opus/sonnet) instead of raw model strings
+- **Model presets** — Simple preset names (medium/xhigh, flash/pro, opus/sonnet) instead of raw model strings
+- **Live introspection** — Inspect semantic agent state, pane output, and active tmux sessions
+- **Prompt recovery** — Common trust/onboarding prompts are auto-dismissed during startup and waits
 - **Configurable** — Choose models, reasoning levels, display modes via `config/settings.json`
 
 ## Quick Start
@@ -38,9 +40,14 @@ claude mcp add -s user squad -- bun run /path/to/squad/src/index.ts
 
 | Tool | Parameters | Description |
 |------|-----------|-------------|
-| `codex` | `message`, `workDir`, `allowFileEdits`, `model` | Codex call. Presets: `spark` (gpt-5.3-codex-spark, xhigh reasoning), `smart` (gpt-5.4, high reasoning) |
-| `gemini` | `message`, `workDir`, `allowFileEdits`, `model` | Gemini call. Presets: `flash` (gemini-3-flash-preview), `pro` (gemini-3.1-pro-preview) |
-| `claude` | `message`, `workDir`, `allowFileEdits`, `model` | Claude call. Presets: `opus` (claude-opus-4-6), `sonnet` (claude-sonnet-4-6) |
+| `codex` | `message`, `workDir`, `allowFileEdits`, `model`, `waitForResponse?` | Codex call. All on `gpt-5.5`; `model` selects reasoning effort: `medium` (fast everyday), `xhigh` (deep reasoning + orchestration). Can queue async work with `waitForResponse: false`. |
+| `gemini` | `message`, `workDir`, `allowFileEdits`, `model`, `waitForResponse?` | Gemini call. Presets: `flash` (gemini-3-flash-preview), `pro` (gemini-3.1-pro-preview) |
+| `claude` | `message`, `workDir`, `allowFileEdits`, `model`, `waitForResponse?` | Claude call. Presets: `opus` (claude-opus-4-6), `sonnet` (claude-sonnet-4-6). Can queue async work with `waitForResponse: false`. |
+| `continue_agent` | `agent`, `message`, `allowFileEdits`, `waitForResponse?` | Send a follow-up prompt to an already running agent session |
+| `list_agents` | — | List all available agent presets with live connection state and config |
+| `list_sessions` | — | List active tmux sessions owned by this MCP instance |
+| `get_agent_state` | `agent`, `lines?` | Semantic state summary: responding, awaiting confirmation, ready for input, etc. |
+| `get_agent_output` | `agent`, `lines?` | Capture recent tmux pane output for debugging stalls or prompts |
 | `poll_events` | `agent`, `peek?` | Poll pending events from an agent |
 | `wait_for_event` | `agent`, `eventType`, `timeoutMs?` | Block until a specific event arrives |
 | `get_agent_status` | `agent` | Query agent connection state and activity |
@@ -76,7 +83,7 @@ After changes, reconnect the MCP server in Claude Code:
 
 | Setting | Values | Description |
 |---------|--------|-------------|
-| `codex.model` | `gpt-5.4`, `gpt-5.3-codex-spark` | Codex model |
+| `codex.model` | `gpt-5.5` | Codex model (single model, reasoning effort differentiates presets) |
 | `codex.reasoning` | `xhigh`, `high`, `medium`, `low` | Reasoning effort level |
 | `gemini.model` | `gemini-3-flash-preview`, `gemini-3.1-pro-preview` | Gemini model |
 | `claude.model` | `claude-opus-4-6`, `claude-sonnet-4-6` | Claude model |
@@ -139,7 +146,7 @@ src/
 │   ├── gemini.ts           # Gemini agent
 │   └── claude.ts           # Claude agent
 └── tools/
-    ├── codex-tools.ts      # Codex tool (spark / full presets)
+    ├── codex-tools.ts      # Codex tool (medium / xhigh presets)
     ├── gemini-tools.ts     # Gemini tool (flash / pro presets)
     ├── claude-tools.ts     # Claude tool (opus / sonnet presets)
     └── status-tools.ts     # poll_events, wait_for_event, get_agent_status, cleanup
