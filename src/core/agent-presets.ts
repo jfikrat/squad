@@ -4,8 +4,6 @@ import { AGENTS } from "../config/agents";
 export const AVAILABLE_AGENTS = [
 	"codex_medium",
 	"codex_xhigh",
-	"gemini_flash",
-	"gemini_pro",
 	"claude_sonnet",
 	"claude_opus",
 ] as const;
@@ -26,11 +24,6 @@ const CODEX_PRESETS: Record<
 > = {
 	medium: { model: CODEX_MODEL_ID, reasoning: "medium" },
 	xhigh: { model: CODEX_MODEL_ID, reasoning: "xhigh" },
-};
-
-const GEMINI_PRESETS: Record<"flash" | "pro", string> = {
-	flash: "gemini-3-flash-preview",
-	pro: "gemini-3.1-pro-preview",
 };
 
 const CLAUDE_PRESETS: Record<
@@ -56,23 +49,6 @@ export function resolveAgentConfig(agentName: AgentType): AgentConfig | null {
 				resolved.model,
 				"-c",
 				`model_reasoning_effort="${resolved.reasoning}"`,
-			],
-		};
-	}
-
-	if (agentName.startsWith("gemini_")) {
-		const preset = agentName.replace("gemini_", "") as "flash" | "pro";
-		const modelId = GEMINI_PRESETS[preset];
-		if (!modelId) return null;
-		const base = AGENTS.gemini;
-		return {
-			...base,
-			name: agentName,
-			command: [
-				...base.command.slice(0, 1),
-				"-m",
-				modelId,
-				...base.command.slice(1),
 			],
 		};
 	}

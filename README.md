@@ -1,6 +1,6 @@
 # Squad MCP Server
 
-**Multi-agent orchestration for Claude Code** — dispatch tasks to Codex, Gemini, and Claude simultaneously.
+**Multi-agent orchestration for Claude Code** — dispatch tasks to Codex and Claude simultaneously.
 
 ![Squad MCP Banner](assets/banner.jpg)
 
@@ -8,11 +8,11 @@ One prompt. Multiple AI perspectives. All in your terminal.
 
 ## Features
 
-- **Parallel execution** — Run Codex (GPT-5.4), Gemini 3, and Claude in parallel via MCP tools
+- **Parallel execution** — Run Codex (GPT-5.5) and Claude (Opus 4.7 / Sonnet 4.6) in parallel via MCP tools
 - **tmux-based** — Each agent runs in its own tmux session, visible in real-time
 - **Pane layout** — Agents auto-arrange as tmux panes alongside Claude Code
 - **Instance isolation** — Multiple Claude Code sessions don't interfere with each other
-- **Model presets** — Simple preset names (medium/xhigh, flash/pro, opus/sonnet) instead of raw model strings
+- **Model presets** — Simple preset names (medium/xhigh, opus/sonnet) instead of raw model strings
 - **Live introspection** — Inspect semantic agent state, pane output, and active tmux sessions
 - **Prompt recovery** — Common trust/onboarding prompts are auto-dismissed during startup and waits
 - **Configurable** — Choose models, reasoning levels, display modes via `config/settings.json`
@@ -32,7 +32,6 @@ claude mcp add -s user squad -- bun run /path/to/squad/src/index.ts
 - [Bun](https://bun.sh/) — JavaScript runtime
 - [tmux](https://github.com/tmux/tmux) — Terminal multiplexer
 - [Codex CLI](https://github.com/openai/codex) — OpenAI Codex
-- [Gemini CLI](https://github.com/google/gemini-cli) — Google Gemini
 - [Claude CLI](https://docs.anthropic.com/en/docs/claude-code) — Anthropic Claude Code
 - Terminal emulator (alacritty, kitty, wezterm, etc.) — for `display: "terminal"` mode
 
@@ -41,9 +40,9 @@ claude mcp add -s user squad -- bun run /path/to/squad/src/index.ts
 | Tool | Parameters | Description |
 |------|-----------|-------------|
 | `codex` | `message`, `workDir`, `allowFileEdits`, `model`, `waitForResponse?` | Codex call. All on `gpt-5.5`; `model` selects reasoning effort: `medium` (fast everyday), `xhigh` (deep reasoning + orchestration). Can queue async work with `waitForResponse: false`. |
-| `gemini` | `message`, `workDir`, `allowFileEdits`, `model`, `waitForResponse?` | Gemini call. Presets: `flash` (gemini-3-flash-preview), `pro` (gemini-3.1-pro-preview) |
 | `claude` | `message`, `workDir`, `allowFileEdits`, `model`, `waitForResponse?` | Claude call. Presets: `opus` (claude-opus-4-7 + xhigh effort), `sonnet` (claude-sonnet-4-6). Can queue async work with `waitForResponse: false`. |
 | `continue_agent` | `agent`, `message`, `allowFileEdits`, `waitForResponse?` | Send a follow-up prompt to an already running agent session |
+| `task_graph` | `name`, `workDir`, `tasks[]`, `outputFile?`, `maxConcurrency?` | DAG of Claude workers — independent tasks run in parallel, dependents receive parent results |
 | `list_agents` | — | List all available agent presets with live connection state and config |
 | `list_sessions` | — | List active tmux sessions owned by this MCP instance |
 | `get_agent_state` | `agent`, `lines?` | Semantic state summary: responding, awaiting confirmation, ready for input, etc. |
@@ -60,11 +59,8 @@ Edit `config/settings.json` to customize:
 ```json
 {
   "codex": {
-    "model": "gpt-5.4",
+    "model": "gpt-5.5",
     "reasoning": "xhigh"
-  },
-  "gemini": {
-    "model": "gemini-3-flash-preview"
   },
   "claude": {
     "model": "claude-opus-4-7"
@@ -83,9 +79,8 @@ After changes, reconnect the MCP server in Claude Code:
 
 | Setting | Values | Description |
 |---------|--------|-------------|
-| `codex.model` | `gpt-5.5` | Codex model (single model, reasoning effort differentiates presets) |
+| `codex.model` | `gpt-5.5` | Codex model (single model; reasoning effort differentiates presets) |
 | `codex.reasoning` | `xhigh`, `high`, `medium`, `low` | Reasoning effort level |
-| `gemini.model` | `gemini-3-flash-preview`, `gemini-3.1-pro-preview` | Gemini model |
 | `claude.model` | `claude-opus-4-7`, `claude-sonnet-4-6` | Claude model |
 | `terminal` | `alacritty`, `kitty`, `wezterm`, ... | Terminal emulator |
 | `display` | `pane`, `terminal`, `none` | Agent display mode |
@@ -105,7 +100,7 @@ After changes, reconnect the MCP server in Claude Code:
 +-----------+------------+       +-----------+------+------+
 |           |  Codex     |       |           | A1   | A2   |
 |  Claude   +------------+       |  Claude   +------+------+
-|  Code     |  Gemini    |       |  Code     | A3   | A4   |
+|  Code     |  Claude 2  |       |  Code     | A3   | A4   |
 |  (40%)    |  (60%)     |       |  (40%)    |   (60%)     |
 +-----------+------------+       +-----------+-------------+
 ```
@@ -118,7 +113,6 @@ Priority: ENV > settings.json > default
 |----------|-------------|
 | `SQUAD_CODEX_MODEL` | Codex model |
 | `SQUAD_CODEX_REASONING` | Codex reasoning effort |
-| `SQUAD_GEMINI_MODEL` | Gemini model |
 | `SQUAD_CLAUDE_MODEL` | Claude model |
 | `SQUAD_TERMINAL` | Terminal emulator |
 | `SQUAD_DISPLAY` | Display mode (`pane`, `terminal`, `none`) |
@@ -137,19 +131,20 @@ src/
 │   ├── tmux-manager.ts     # tmux session management + pane grid layout
 │   ├── instance.ts         # MCP instance ID (session isolation)
 │   ├── codex-session.ts    # Codex JSONL session reader
-│   ├── gemini-session.ts   # Gemini JSON session reader
 │   ├── claude-session.ts   # Claude JSONL session reader
-│   ├── response-parser.ts  # Response cleanup
-│   └── session-watcher.ts  # File watching utilities
+│   ├── agent-presets.ts    # Preset registry + resolveAgentConfig
+│   ├── agent-state.ts      # Semantic state parser
+│   ├── agent-ui.ts         # Auto-dismiss onboarding prompts
+│   └── graph-executor.ts   # DAG executor for task_graph
 ├── agents/
 │   ├── codex.ts            # Codex agent
-│   ├── gemini.ts           # Gemini agent
 │   └── claude.ts           # Claude agent
 └── tools/
     ├── codex-tools.ts      # Codex tool (medium / xhigh presets)
-    ├── gemini-tools.ts     # Gemini tool (flash / pro presets)
     ├── claude-tools.ts     # Claude tool (opus / sonnet presets)
-    └── status-tools.ts     # poll_events, wait_for_event, get_agent_status, cleanup
+    ├── conversation-tools.ts # continue_agent (provider-agnostic follow-up)
+    ├── graph-tools.ts      # task_graph
+    └── status-tools.ts     # poll_events, wait_for_event, get_agent_status, list_*, cleanup
 ```
 
 ### Key Design Decisions
@@ -159,8 +154,7 @@ src/
 - **Preset-only models**: Model parameter is a required enum, no raw strings accepted
 - **Pane grid layout**: In `display: "pane"` mode, agents auto-arrange in a grid
 - **Request ID system**: `[RQ-xxx]` / `[ANS-xxx]` markers for response matching
-- **60 min timeout**: Maximum wait time per operation
-- **30 min inactivity**: Unused sessions are automatically cleaned up
+- **No timeout**: Sessions persist indefinitely until `cleanup()` or server shutdown
 - **Instance-scoped cleanup**: `cleanup` only kills sessions owned by this instance
 
 ## Development

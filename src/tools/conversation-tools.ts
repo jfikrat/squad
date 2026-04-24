@@ -1,6 +1,5 @@
 import { sendClaudePrompt } from "../agents/claude";
 import { sendCodexPrompt } from "../agents/codex";
-import { sendGeminiPrompt } from "../agents/gemini";
 import {
 	AVAILABLE_AGENTS,
 	type AgentType,
@@ -113,24 +112,12 @@ export async function handleContinueAgent(args: {
 		return formatAgentResult(config.name, result);
 	}
 
-	if (args.agent.startsWith("claude_")) {
-		const result = await sendClaudePrompt(
-			config,
-			tmuxSession.workDir,
-			args.message,
-			args.allowFileEdits,
-			{ waitForResponse: args.waitForResponse },
-		);
-		return formatAgentResult(config.name, result);
-	}
-
-	const result = await sendGeminiPrompt(
+	const result = await sendClaudePrompt(
 		config,
 		tmuxSession.workDir,
 		args.message,
-		{
-			waitForResponse: args.waitForResponse,
-		},
+		args.allowFileEdits,
+		{ waitForResponse: args.waitForResponse },
 	);
 	return formatAgentResult(config.name, result);
 }

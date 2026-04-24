@@ -4,7 +4,6 @@ import { resolve } from "node:path";
 // Settings dosyasını oku (config/settings.json)
 interface Settings {
 	codex?: { model?: string; reasoning?: string };
-	gemini?: { model?: string };
 	claude?: { model?: string };
 	terminal?: string;
 	display?: string;
@@ -35,14 +34,6 @@ export interface AgentConfig {
 }
 
 export const AGENTS: Record<string, AgentConfig> = {
-	gemini: {
-		name: "gemini",
-		command: ["gemini", "-y"],
-		safePrefix: "Soru: ",
-		responseMarker: "◆END◆",
-		readyPatterns: ["YOLO mode", "Type your message", "Model:"],
-		responseDetection: "marker",
-	},
 	codex: {
 		name: "codex",
 		command: ["codex", "--dangerously-bypass-approvals-and-sandbox"],
@@ -85,13 +76,6 @@ export const CODEX_REASONING: ReasoningEffort =
 // Öncelik: ENV > settings.json > default
 export const CLAUDE_MODEL =
 	process.env.SQUAD_CLAUDE_MODEL || settings.claude?.model || "claude-opus-4-7";
-
-// Gemini model (tam isim)
-// Öncelik: ENV > settings.json > default
-export const GEMINI_MODEL =
-	process.env.SQUAD_GEMINI_MODEL ||
-	settings.gemini?.model ||
-	"gemini-3-flash-preview";
 
 // Terminal emülatör ayarı
 // Öncelik: ENV > settings.json > default

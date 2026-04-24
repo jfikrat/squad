@@ -22,7 +22,7 @@ export const INSTANCE_ID = generateInstanceId();
 
 /**
  * Session ismi oluştur (instance ID ile prefix'li)
- * @param name Agent/session adı (örn: "codex_xhigh", "gemini_flash")
+ * @param name Agent/session adı (örn: "codex_xhigh", "claude_opus")
  * @returns Unique session ismi (örn: "agents_a7x2_codex_xhigh")
  */
 export function getSessionName(name: string): string {

@@ -15,7 +15,6 @@ import {
 	continueAgentTool,
 	handleContinueAgent,
 } from "./tools/conversation-tools";
-import { geminiTool, handleGemini } from "./tools/gemini-tools";
 import { handleTaskGraph, taskGraphTool } from "./tools/graph-tools";
 import {
 	cleanupTool,
@@ -53,7 +52,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 	return {
 		tools: [
 			codexTool,
-			geminiTool,
 			claudeTool,
 			continueAgentTool,
 			pollEventsTool,
@@ -96,24 +94,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 				},
 			);
 
-		case "gemini":
-			return handleGemini(
-				args as {
-					message: string;
-					workDir: string;
-					model: string;
-					allowFileEdits: boolean;
-				},
-			);
-
 		case "continue_agent":
 			return handleContinueAgent(
 				args as {
 					agent:
 						| "codex_medium"
 						| "codex_xhigh"
-						| "gemini_flash"
-						| "gemini_pro"
 						| "claude_sonnet"
 						| "claude_opus";
 					message: string;
@@ -134,8 +120,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 					agent:
 						| "codex_medium"
 						| "codex_xhigh"
-						| "gemini_flash"
-						| "gemini_pro"
 						| "claude_sonnet"
 						| "claude_opus";
 					lines?: number;
@@ -148,8 +132,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 					agent:
 						| "codex_medium"
 						| "codex_xhigh"
-						| "gemini_flash"
-						| "gemini_pro"
 						| "claude_sonnet"
 						| "claude_opus";
 					lines?: number;
@@ -162,8 +144,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 					agent:
 						| "codex_medium"
 						| "codex_xhigh"
-						| "gemini_flash"
-						| "gemini_pro"
 						| "claude_sonnet"
 						| "claude_opus";
 					peek?: boolean;
@@ -176,8 +156,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 					agent:
 						| "codex_medium"
 						| "codex_xhigh"
-						| "gemini_flash"
-						| "gemini_pro"
 						| "claude_sonnet"
 						| "claude_opus";
 					eventType:
@@ -196,8 +174,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 					agent:
 						| "codex_medium"
 						| "codex_xhigh"
-						| "gemini_flash"
-						| "gemini_pro"
 						| "claude_sonnet"
 						| "claude_opus";
 				},

@@ -1,10 +1,7 @@
 {
   "codex": {
-    "model": "gpt-5.3-codex",
+    "model": "gpt-5.5",
     "reasoning": "xhigh"
-  },
-  "gemini": {
-    "model": "gemini-3-flash-preview"
   },
   "claude": {
     "model": "claude-opus-4-7"

@@ -8,13 +8,8 @@ import {
 	getCodexStatus,
 	pollEvents as pollCodexEvents,
 } from "../agents/codex";
-import {
-	consumeEvent as consumeGeminiEvent,
-	getGeminiStatus,
-	pollEvents as pollGeminiEvents,
-} from "../agents/gemini";
 import type { AgentConfig } from "../config/agents";
-import { CLAUDE_MODEL, CODEX_MODEL, GEMINI_MODEL } from "../config/agents";
+import { CLAUDE_MODEL, CODEX_MODEL } from "../config/agents";
 import {
 	AVAILABLE_AGENTS,
 	type AgentType,
@@ -29,30 +24,21 @@ function getAgentEvents(agent: AgentType, peek = false) {
 	if (agent.startsWith("codex_")) {
 		return pollCodexEvents(agent, peek);
 	}
-	if (agent.startsWith("claude_")) {
-		return pollClaudeEvents(agent, peek);
-	}
-	return pollGeminiEvents(agent, peek);
+	return pollClaudeEvents(agent, peek);
 }
 
 function consumeAgentEvent(agent: AgentType, eventType?: EventType) {
 	if (agent.startsWith("codex_")) {
 		return consumeCodexEvent(agent, eventType);
 	}
-	if (agent.startsWith("claude_")) {
-		return consumeClaudeEvent(agent, eventType);
-	}
-	return consumeGeminiEvent(agent, eventType);
+	return consumeClaudeEvent(agent, eventType);
 }
 
 function getAgentStatusSnapshot(agent: AgentType, config: AgentConfig) {
 	if (agent.startsWith("codex_")) {
 		return getCodexStatus(config);
 	}
-	if (agent.startsWith("claude_")) {
-		return getClaudeStatus(config);
-	}
-	return getGeminiStatus(config);
+	return getClaudeStatus(config);
 }
 
 export const pollEventsTool = {
@@ -366,14 +352,10 @@ export async function handleListAgents(): Promise<{
 			responseDetection: config.responseDetection,
 			configuredDefaultModel: agent.startsWith("codex_")
 				? CODEX_MODEL
-				: agent.startsWith("gemini_")
-					? GEMINI_MODEL
-					: CLAUDE_MODEL,
+				: CLAUDE_MODEL,
 			defaultModel: agent.startsWith("codex_")
 				? config.command[config.command.indexOf("-m") + 1]
-				: agent.startsWith("gemini_")
-					? config.command[config.command.indexOf("-m") + 1]
-					: config.command[config.command.indexOf("--model") + 1],
+				: config.command[config.command.indexOf("--model") + 1],
 		});
 	}
 
