@@ -104,7 +104,10 @@ export async function handleTaskGraph(args: {
 
 	const taskSummary = args.tasks
 		.map((t) => {
-			const deps = t.dependsOn.length > 0 ? ` (after: ${t.dependsOn.join(", ")})` : " (no deps)";
+			const deps =
+				t.dependsOn.length > 0
+					? ` (after: ${t.dependsOn.join(", ")})`
+					: " (no deps)";
 			return `  - ${t.id} [${t.model}]${deps}`;
 		})
 		.join("\n");

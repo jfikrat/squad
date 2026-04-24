@@ -16,7 +16,7 @@ import {
 	handleContinueAgent,
 } from "./tools/conversation-tools";
 import { geminiTool, handleGemini } from "./tools/gemini-tools";
-import { taskGraphTool, handleTaskGraph } from "./tools/graph-tools";
+import { handleTaskGraph, taskGraphTool } from "./tools/graph-tools";
 import {
 	cleanupTool,
 	getAgentOutputTool,

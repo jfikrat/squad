@@ -50,7 +50,8 @@ function validateGraph(graph: TaskGraph): string | null {
 		for (const dep of task.dependsOn) {
 			if (!ids.has(dep)) return `Task "${task.id}" depends on unknown "${dep}"`;
 		}
-		if (task.dependsOn.includes(task.id)) return `Task "${task.id}" depends on itself`;
+		if (task.dependsOn.includes(task.id))
+			return `Task "${task.id}" depends on itself`;
 	}
 	// Simple cycle detection via topological sort
 	const visited = new Set<string>();
@@ -60,7 +61,8 @@ function validateGraph(graph: TaskGraph): string | null {
 		if (visiting.has(id)) return true;
 		if (visited.has(id)) return false;
 		visiting.add(id);
-		const node = taskMap.get(id)!;
+		const node = taskMap.get(id);
+		if (!node) return false;
 		for (const dep of node.dependsOn) {
 			if (hasCycle(dep)) return true;
 		}
@@ -78,7 +80,11 @@ export async function executeGraph(
 	graph: TaskGraph,
 ): Promise<{ graphId: string; outputFile: string }> {
 	const graphId = crypto.randomUUID().slice(0, 8);
-	const outputFile = resolveOutputFile(graph.workDir, graphId, graph.outputFile);
+	const outputFile = resolveOutputFile(
+		graph.workDir,
+		graphId,
+		graph.outputFile,
+	);
 	const maxConcurrency = graph.maxConcurrency ?? 3;
 
 	// Validate
@@ -122,7 +128,8 @@ export async function executeGraph(
 	let allSuccess = true;
 
 	for (const task of graph.tasks) {
-		const state = states.get(task.id)!;
+		const state = states.get(task.id);
+		if (!state) continue;
 		sections.push(`## ${task.id} (${task.model})\n`);
 		if (state.status === "done") {
 			sections.push(state.result || "(empty result)");
@@ -185,7 +192,8 @@ async function runDAG(
 		const toDispatch = ready.slice(0, maxConcurrency - running.size);
 
 		const promises = toDispatch.map(async (taskId) => {
-			const state = states.get(taskId)!;
+			const state = states.get(taskId);
+			if (!state) return;
 			state.status = "running";
 			running.add(taskId);
 
@@ -224,8 +232,9 @@ async function executeTask(
 	let contextPrefix = "";
 	if (node.dependsOn.length > 0) {
 		const depContexts = node.dependsOn.map((depId) => {
-			const depState = allStates.get(depId)!;
-			return `[Result from "${depId}"]:\n${depState.result || "(no result)"}\n`;
+			const depState = allStates.get(depId);
+			const result = depState?.result ?? "(no result)";
+			return `[Result from "${depId}"]:\n${result}\n`;
 		});
 		contextPrefix = `${depContexts.join("\n")}\n[Your task]:\n`;
 	}
