@@ -28,9 +28,9 @@ interface TaskState {
 	error?: string;
 }
 
-const MODEL_PRESETS: Record<string, string> = {
-	opus: "claude-opus-4-6",
-	sonnet: "claude-sonnet-4-6",
+const MODEL_PRESETS: Record<string, { model: string; effort?: string }> = {
+	opus: { model: "claude-opus-4-7", effort: "xhigh" },
+	sonnet: { model: "claude-sonnet-4-6" },
 };
 
 function resolveOutputFile(
@@ -243,11 +243,13 @@ async function executeTask(
 
 	// Each graph task gets a unique session to allow parallel execution
 	const taskSessionId = crypto.randomUUID().slice(0, 8);
-	const effectiveModel = MODEL_PRESETS[node.model];
+	const resolved = MODEL_PRESETS[node.model];
+	const command = [...AGENTS.claude.command, "--model", resolved.model];
+	if (resolved.effort) command.push("--effort", resolved.effort);
 	const config = {
 		...AGENTS.claude,
 		name: `claude_${node.model}_g_${taskSessionId}`,
-		command: [...AGENTS.claude.command, "--model", effectiveModel],
+		command,
 	};
 
 	try {

@@ -36,17 +36,18 @@ export const claudeTool = {
 				type: "string",
 				enum: ["opus", "sonnet"],
 				description:
-					"Model preset (MUST be exactly one of the enum values, do NOT enter raw model names): 'opus' = most capable for deep analysis, 'sonnet' = faster for most coding tasks.",
+					"Model preset (MUST be exactly one of the enum values, do NOT enter raw model names): 'opus' = claude-opus-4-7 with xhigh reasoning effort for deep analysis, 'sonnet' = claude-sonnet-4-6 for faster coding tasks.",
 			},
 		},
 		required: ["message", "workDir", "allowFileEdits", "model"],
 	},
 };
 
-const CLAUDE_MODEL_PRESETS: Record<string, string> = {
-	opus: "claude-opus-4-6",
-	sonnet: "claude-sonnet-4-6",
-};
+const CLAUDE_MODEL_PRESETS: Record<string, { model: string; effort?: string }> =
+	{
+		opus: { model: "claude-opus-4-7", effort: "xhigh" },
+		sonnet: { model: "claude-sonnet-4-6" },
+	};
 
 export async function handleClaude(args: {
 	message: string;
@@ -56,8 +57,8 @@ export async function handleClaude(args: {
 	waitForResponse?: boolean;
 	outputFile?: string;
 }): Promise<{ content: Array<{ type: string; text: string }> }> {
-	const effectiveModel = CLAUDE_MODEL_PRESETS[args.model];
-	if (!effectiveModel) {
+	const resolved = CLAUDE_MODEL_PRESETS[args.model];
+	if (!resolved) {
 		return {
 			content: [
 				{
@@ -69,10 +70,13 @@ export async function handleClaude(args: {
 	}
 	const shortName = args.model;
 
+	const command = [...AGENTS.claude.command, "--model", resolved.model];
+	if (resolved.effort) command.push("--effort", resolved.effort);
+
 	const config = {
 		...AGENTS.claude,
 		name: `claude_${shortName}`,
-		command: [...AGENTS.claude.command, "--model", effectiveModel],
+		command,
 	};
 
 	const result = await sendClaudePrompt(

@@ -42,7 +42,7 @@ claude mcp add -s user squad -- bun run /path/to/squad/src/index.ts
 |------|-----------|-------------|
 | `codex` | `message`, `workDir`, `allowFileEdits`, `model`, `waitForResponse?` | Codex call. All on `gpt-5.5`; `model` selects reasoning effort: `medium` (fast everyday), `xhigh` (deep reasoning + orchestration). Can queue async work with `waitForResponse: false`. |
 | `gemini` | `message`, `workDir`, `allowFileEdits`, `model`, `waitForResponse?` | Gemini call. Presets: `flash` (gemini-3-flash-preview), `pro` (gemini-3.1-pro-preview) |
-| `claude` | `message`, `workDir`, `allowFileEdits`, `model`, `waitForResponse?` | Claude call. Presets: `opus` (claude-opus-4-6), `sonnet` (claude-sonnet-4-6). Can queue async work with `waitForResponse: false`. |
+| `claude` | `message`, `workDir`, `allowFileEdits`, `model`, `waitForResponse?` | Claude call. Presets: `opus` (claude-opus-4-7 + xhigh effort), `sonnet` (claude-sonnet-4-6). Can queue async work with `waitForResponse: false`. |
 | `continue_agent` | `agent`, `message`, `allowFileEdits`, `waitForResponse?` | Send a follow-up prompt to an already running agent session |
 | `list_agents` | — | List all available agent presets with live connection state and config |
 | `list_sessions` | — | List active tmux sessions owned by this MCP instance |
@@ -67,7 +67,7 @@ Edit `config/settings.json` to customize:
     "model": "gemini-3-flash-preview"
   },
   "claude": {
-    "model": "claude-opus-4-6"
+    "model": "claude-opus-4-7"
   },
   "terminal": "alacritty",
   "display": "pane"
@@ -86,7 +86,7 @@ After changes, reconnect the MCP server in Claude Code:
 | `codex.model` | `gpt-5.5` | Codex model (single model, reasoning effort differentiates presets) |
 | `codex.reasoning` | `xhigh`, `high`, `medium`, `low` | Reasoning effort level |
 | `gemini.model` | `gemini-3-flash-preview`, `gemini-3.1-pro-preview` | Gemini model |
-| `claude.model` | `claude-opus-4-6`, `claude-sonnet-4-6` | Claude model |
+| `claude.model` | `claude-opus-4-7`, `claude-sonnet-4-6` | Claude model |
 | `terminal` | `alacritty`, `kitty`, `wezterm`, ... | Terminal emulator |
 | `display` | `pane`, `terminal`, `none` | Agent display mode |
 

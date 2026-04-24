@@ -84,7 +84,7 @@ export const CODEX_REASONING: ReasoningEffort =
 // Claude model
 // Öncelik: ENV > settings.json > default
 export const CLAUDE_MODEL =
-	process.env.SQUAD_CLAUDE_MODEL || settings.claude?.model || "claude-opus-4-6";
+	process.env.SQUAD_CLAUDE_MODEL || settings.claude?.model || "claude-opus-4-7";
 
 // Gemini model (tam isim)
 // Öncelik: ENV > settings.json > default

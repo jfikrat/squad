@@ -33,9 +33,12 @@ const GEMINI_PRESETS: Record<"flash" | "pro", string> = {
 	pro: "gemini-3.1-pro-preview",
 };
 
-const CLAUDE_PRESETS: Record<"sonnet" | "opus", string> = {
-	sonnet: "claude-sonnet-4-6",
-	opus: "claude-opus-4-6",
+const CLAUDE_PRESETS: Record<
+	"sonnet" | "opus",
+	{ model: string; effort?: string }
+> = {
+	sonnet: { model: "claude-sonnet-4-6" },
+	opus: { model: "claude-opus-4-7", effort: "xhigh" },
 };
 
 export function resolveAgentConfig(agentName: AgentType): AgentConfig | null {
@@ -76,13 +79,15 @@ export function resolveAgentConfig(agentName: AgentType): AgentConfig | null {
 
 	if (agentName.startsWith("claude_")) {
 		const preset = agentName.replace("claude_", "") as "sonnet" | "opus";
-		const model = CLAUDE_PRESETS[preset];
-		if (!model) return null;
+		const resolved = CLAUDE_PRESETS[preset];
+		if (!resolved) return null;
 		const base = AGENTS.claude;
+		const command = [...base.command, "--model", resolved.model];
+		if (resolved.effort) command.push("--effort", resolved.effort);
 		return {
 			...base,
 			name: agentName,
-			command: [...base.command, "--model", model],
+			command,
 		};
 	}
 
