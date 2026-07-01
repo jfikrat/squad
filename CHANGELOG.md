@@ -1,6 +1,22 @@
 # Changelog
 
-## [4.1.0] — Current
+## [4.2.0] — Current
+
+### Fixed
+- **Viewer close no longer kills the agent session** — the `trap ... kill-session` in terminal/pane fallback viewers was removed; closing the window just detaches, the agent keeps working
+- **Async dispatch returns immediately** — `waitForResponse: false` no longer blocks through TUI boot (session init, readiness wait, and send now run in the background), eliminating gateway tool-call timeouts on slow boots
+- **Prompts can no longer be typed into a booting shell** — every send (initial and `continue_agent`) waits for the TUI to be sendable (ready footer or busy indicator); bare shell prompt `❯` alone no longer counts as ready
+- **Prompt delivery is verified** — after paste+Enter the `[RQ-id]` marker must appear in the pane (or Codex rollout JSONL); one automatic re-send, then a descriptive error — silent prompt loss is gone
+- **State detection false positives** — the echoed instruction `"[ANS-...]"` no longer counts as a completion marker; error phase is now derived only from the pane tail so task output containing "error"/"failed" (test logs, build output) no longer flags the agent as errored
+
+### Added
+- **Codex boot-retry** — when Codex exits at startup because `~/.codex` sqlite is locked by another Codex process, the command is relaunched every 10s (screen + scrollback cleared between attempts) until the ready timeout
+- `SQUAD_READY_TIMEOUT_MS` (default 180s) and `SQUAD_RESPONSE_TIMEOUT_MS` (default 3h) env overrides; every wait loop now has a deadline instead of spinning forever
+- Intentional-stop tracking — `cleanup`/stop no longer floods pending events with "terminated by user" errors from its own background waiters
+
+---
+
+## [4.1.0]
 
 ### Added
 - **Unified model preset system** across all three core agents — `enum` constraint enforces valid values, empty/arbitrary strings rejected at schema level

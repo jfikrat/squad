@@ -1,6 +1,7 @@
 import type { AgentConfig } from "../config/agents";
 import { handleAutoDismiss } from "../core/agent-ui";
 import {
+	findCodexRequestInRecentSessions,
 	findCodexResponseInRecentSessions,
 	generateCodexRequestId,
 } from "../core/codex-session";
@@ -10,11 +11,47 @@ import {
 	createSession,
 	getSession,
 	hasSession,
+	isSessionStopping,
 	killSession,
+	relaunchCommand,
 	sendBuffer,
-	sendKeys,
 	updateLastActivity,
 } from "../core/tmux-manager";
+
+// Bilinçli durdurmaları event kirliliğinden ayırmak için özel hata sınıfı
+class SessionStoppedError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "SessionStoppedError";
+	}
+}
+
+// Ready bekleme üst sınırı (TUI boot yavaş olabilir: yük altında dakikalar sürebiliyor)
+const READY_TIMEOUT_MS = Number.parseInt(
+	process.env.SQUAD_READY_TIMEOUT_MS || "",
+	10,
+);
+const EFFECTIVE_READY_TIMEOUT_MS = Number.isFinite(READY_TIMEOUT_MS)
+	? READY_TIMEOUT_MS
+	: 180_000;
+
+// Yanıt bekleme üst sınırı (xhigh uzun görevler için cömert default: 3 saat)
+const RESPONSE_TIMEOUT_MS = Number.parseInt(
+	process.env.SQUAD_RESPONSE_TIMEOUT_MS || "",
+	10,
+);
+const EFFECTIVE_RESPONSE_TIMEOUT_MS = Number.isFinite(RESPONSE_TIMEOUT_MS)
+	? RESPONSE_TIMEOUT_MS
+	: 3 * 60 * 60 * 1000;
+
+// TUI'nin canlı (yazılabilir) olduğunu gösteren işaretler: hazır footer'ları
+// veya aktif yanıt üretim göstergeleri. Shell prompt'u (❯) bunlara DAHİL DEĞİL —
+// boot sırasında shell'e paste edilen prompt'ların kaybolmasını bu ayrım engeller.
+const CODEX_BUSY_PATTERNS = [
+	"esc to interrupt",
+	"Esc to interrupt",
+	"esc to cancel",
+];
 
 export interface CodexResult {
 	success: boolean;
@@ -44,20 +81,49 @@ export async function initCodexSession(
 		return sessionName;
 	}
 
-	// Yeni session oluştur
+	// Yeni session oluştur. Readiness beklemesi bilinçli olarak burada YOK:
+	// tek kapı waitForSendable — boot-retry mantığı orada.
 	await createSession(sessionName, workDir, config.command);
-
-	// Ready olana kadar bekle
-	await waitForReady(sessionName, config.readyPatterns);
 
 	return sessionName;
 }
-async function waitForReady(
+
+// Codex'in ~/.codex sqlite'ı başka bir codex instance'ı tarafından kilitliyken
+// TUI başlayamadan çıkar. Bu geçici bir durumdur — pane'de bu metni görünce
+// komutu yeniden denemek genellikle yeterlidir.
+const CODEX_BOOT_LOCK_PATTERNS = [
+	"another Codex process is using its local data",
+	"database is locked",
+];
+const BOOT_RETRY_INTERVAL_MS = 10_000;
+
+/**
+ * Gönderim öncesi kapı: TUI gerçekten yazılabilir durumda mı?
+ * Session var ama TUI hâlâ boot ediyorsa (pane'de sadece shell görünüyorsa)
+ * paste edilen prompt shell'e gider ve kaybolur — bu bekleyiş onu engeller.
+ * Ready footer'ları VEYA aktif yanıt göstergeleri (input kutusu canlı) kabul edilir.
+ * Codex geçici sqlite kilidi yüzünden başlayamadan çıktıysa komut periyodik
+ * olarak yeniden denenir.
+ */
+async function waitForSendable(
 	sessionName: string,
-	patterns: string[],
+	config: AgentConfig,
 ): Promise<void> {
+	const deadline = Date.now() + EFFECTIVE_READY_TIMEOUT_MS;
+	const sendablePatterns = [...config.readyPatterns, ...CODEX_BUSY_PATTERNS];
+	let lastBootRetry = 0;
+
 	while (true) {
-		const output = await capturePane(sessionName);
+		if (Date.now() > deadline) {
+			throw new Error(
+				`Codex TUI not sendable within ${EFFECTIVE_READY_TIMEOUT_MS}ms (session: ${sessionName})`,
+			);
+		}
+		if (!(await hasSession(sessionName))) {
+			throw newTerminationError(sessionName, "(before send)");
+		}
+
+		const output = await capturePane(sessionName, 120);
 		const autoDismissResult = await handleAutoDismiss(
 			configNameFromSession(sessionName),
 			sessionName,
@@ -68,15 +134,66 @@ async function waitForReady(
 			continue;
 		}
 
-		for (const pattern of patterns) {
-			if (output.includes(pattern)) {
-				await Bun.sleep(500);
-				return;
-			}
+		if (sendablePatterns.some((pattern) => output.includes(pattern))) {
+			return;
 		}
 
-		await Bun.sleep(200);
+		// Boot-retry: sqlite kilidi hatasıyla shell'e düşmüşsek komutu tazele
+		if (
+			CODEX_BOOT_LOCK_PATTERNS.some((pattern) => output.includes(pattern)) &&
+			Date.now() - lastBootRetry > BOOT_RETRY_INTERVAL_MS
+		) {
+			lastBootRetry = Date.now();
+			await relaunchCommand(sessionName, config.command);
+			await Bun.sleep(1500);
+			continue;
+		}
+
+		await Bun.sleep(300);
 	}
+}
+
+/**
+ * Teslimat doğrulaması: paste + Enter sonrası prompt gerçekten submit edildi mi?
+ * Pane'de veya Codex rollout JSONL'inde [RQ-id] aranır; bulunamazsa BİR kez
+ * yeniden paste denenir. Yine yoksa hata fırlatılır — sessiz kayıp yok.
+ */
+async function verifyDelivery(
+	sessionName: string,
+	requestId: string,
+	fullPrompt: string,
+): Promise<void> {
+	const marker = `[RQ-${requestId}]`;
+
+	for (let attempt = 0; attempt < 2; attempt++) {
+		await Bun.sleep(1500);
+
+		const output = await capturePane(sessionName, 300);
+		if (output.includes(marker)) {
+			return;
+		}
+		if (findCodexRequestInRecentSessions(requestId)) {
+			return;
+		}
+
+		if (attempt === 0) {
+			// İlk deneme ulaşmamış: bir kez daha paste et
+			await sendBuffer(sessionName, fullPrompt);
+		}
+	}
+
+	throw new Error(
+		`Prompt delivery could not be verified (requestId: ${requestId}, session: ${sessionName})`,
+	);
+}
+
+function newTerminationError(sessionName: string, context: string): Error {
+	if (isSessionStopping(sessionName)) {
+		return new SessionStoppedError(
+			`Session ${sessionName} stopped intentionally ${context}`,
+		);
+	}
+	return new Error(`Codex session terminated unexpectedly ${context}`);
 }
 
 export async function sendCodexPrompt(
@@ -89,54 +206,63 @@ export async function sendCodexPrompt(
 	const sessionName = getSessionName(config.name);
 	const waitForResponse = options?.waitForResponse ?? true;
 
-	try {
-		// Session yoksa oluştur
+	// Request ID üret
+	const requestId = generateCodexRequestId();
+
+	// Prompt'a request ID ve ANS talimatı ekle
+	const fileConstraint = allowFileEdits
+		? ""
+		: "\n\nIMPORTANT: Do NOT create, modify, or delete any files. Only analyze and respond.";
+	const fullPrompt = `[RQ-${requestId}] ${prompt}${fileConstraint}\nIMPORTANT: End your response with "[ANS-${requestId}]"`;
+
+	// Yavaş kısımların tamamı: session kur, TUI'yi bekle, gönder, teslimatı doğrula.
+	const deliver = async (): Promise<void> => {
 		if (!(await hasSession(sessionName))) {
 			await initCodexSession(config, workDir);
 		}
-
-		// Request ID üret
-		const requestId = generateCodexRequestId();
-
-		// Prompt'a request ID ve ANS talimatı ekle
-		const fileConstraint = allowFileEdits
-			? ""
-			: "\n\nIMPORTANT: Do NOT create, modify, or delete any files. Only analyze and respond.";
-		const fullPrompt = `[RQ-${requestId}] ${prompt}${fileConstraint}\nIMPORTANT: End your response with "[ANS-${requestId}]"`;
-
-		// Prompt gönder (her zaman buffer kullan - daha güvenilir)
+		await waitForSendable(sessionName, config);
 		await sendBuffer(sessionName, fullPrompt);
+		await verifyDelivery(sessionName, requestId, fullPrompt);
+		updateLastActivity(sessionName);
+	};
 
-		if (!waitForResponse) {
-			void waitForCodexResponse(requestId, sessionName)
-				.then((response) => {
-					updateLastActivity(sessionName);
-					addEvent(config.name, {
-						type: "message_complete",
-						timestamp: new Date(),
-						data: response,
-					});
-				})
-				.catch((err) => {
-					const error = err as Error;
-					addEvent(config.name, {
-						type: "error",
-						timestamp: new Date(),
-						data: error.message,
-					});
+	if (!waitForResponse) {
+		// Async mod: TUI boot'unu BEKLEMEDEN hemen dön — gateway timeout'una takılma.
+		// Teslimat + yanıt takibi arka planda ilerler, sonuç event olarak düşer.
+		void deliver()
+			.then(() => waitForCodexResponse(requestId, sessionName))
+			.then((response) => {
+				updateLastActivity(sessionName);
+				addEvent(config.name, {
+					type: "message_complete",
+					timestamp: new Date(),
+					data: response,
 				});
+			})
+			.catch((err) => {
+				const error = err as Error;
+				if (error.name === "SessionStoppedError") {
+					return; // bilinçli cleanup/stop — event kirliliği yapma
+				}
+				addEvent(config.name, {
+					type: "error",
+					timestamp: new Date(),
+					data: error.message,
+				});
+			});
 
-			updateLastActivity(sessionName);
+		return {
+			success: true,
+			sessionName,
+			requestId,
+			queued: true,
+		};
+	}
 
-			return {
-				success: true,
-				sessionName,
-				requestId,
-				queued: true,
-			};
-		}
+	try {
+		await deliver();
 
-		// Response bekle (JSON parsing)
+		// Response bekle (JSONL parsing)
 		const response = await waitForCodexResponse(requestId, sessionName);
 
 		// Cevap alındı, lastActivity güncelle
@@ -158,11 +284,13 @@ export async function sendCodexPrompt(
 	} catch (err) {
 		const error = err as Error;
 
-		addEvent(config.name, {
-			type: "error",
-			timestamp: new Date(),
-			data: error.message,
-		});
+		if (error.name !== "SessionStoppedError") {
+			addEvent(config.name, {
+				type: "error",
+				timestamp: new Date(),
+				data: error.message,
+			});
+		}
 
 		return {
 			success: false,
@@ -176,9 +304,22 @@ async function waitForCodexResponse(
 	requestId: string,
 	sessionName: string,
 ): Promise<string> {
+	const deadline = Date.now() + EFFECTIVE_RESPONSE_TIMEOUT_MS;
+
 	while (true) {
+		if (Date.now() > deadline) {
+			throw new Error(
+				`Codex response timed out after ${EFFECTIVE_RESPONSE_TIMEOUT_MS}ms (requestId: ${requestId})`,
+			);
+		}
+
 		// Session hala var mı kontrol et (kullanıcı manuel kapatmış olabilir)
 		if (!(await hasSession(sessionName))) {
+			if (isSessionStopping(sessionName)) {
+				throw new SessionStoppedError(
+					`Session ${sessionName} stopped intentionally (requestId: ${requestId})`,
+				);
+			}
 			throw new Error(
 				`Codex session terminated by user (requestId: ${requestId})`,
 			);

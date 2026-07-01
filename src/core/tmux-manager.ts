@@ -191,8 +191,10 @@ export async function createSession(
 
 			await $`tmux split-window ${splitFlag} -t ${paneTarget} -l 60% sh -c ${paneAttachCmd}`.quiet();
 		} catch {
-			// tmux içinde değilsek fallback: terminal aç
-			const attachCmd = `trap 'tmux kill-session -t ${name} 2>/dev/null' EXIT; tmux attach -t ${name}`;
+			// tmux içinde değilsek fallback: terminal aç.
+			// NOT: kill-session trap'i bilerek yok — viewer penceresi kapanınca
+			// sadece detach olur, agent session'ı yaşamaya devam eder.
+			const attachCmd = `tmux attach -t ${name}`;
 			const execArgs = TERMINAL_EXEC_ARGS[TERMINAL_EMULATOR] || ["-e"];
 			Bun.spawn([TERMINAL_EMULATOR, ...execArgs, "sh", "-c", attachCmd], {
 				stdout: "ignore",
@@ -200,8 +202,9 @@ export async function createSession(
 			});
 		}
 	} else if (DISPLAY_MODE === "terminal") {
-		// Yeni terminal penceresi aç (eski davranış)
-		const attachCmd = `trap 'tmux kill-session -t ${name} 2>/dev/null' EXIT; tmux attach -t ${name}`;
+		// Yeni terminal penceresi aç (eski davranış).
+		// NOT: kill-session trap'i bilerek yok — pencereyi kapatmak session'ı öldürmez.
+		const attachCmd = `tmux attach -t ${name}`;
 		const execArgs = TERMINAL_EXEC_ARGS[TERMINAL_EMULATOR] || ["-e"];
 		Bun.spawn([TERMINAL_EMULATOR, ...execArgs, "sh", "-c", attachCmd], {
 			stdout: "ignore",
@@ -211,6 +214,28 @@ export async function createSession(
 	// "none" modunda hiçbir görsel UI açılmaz
 
 	return session;
+}
+
+/**
+ * Session içindeki komutu yeniden başlat: ekranı ve scrollback'i temizleyip
+ * komutu tekrar gönderir. Codex'in geçici sqlite kilidi gibi boot hatalarında
+ * kullanılır — eski hata metni scrollback'te kalıp tekrar eşleşmesin diye
+ * clear-history şart.
+ */
+export async function relaunchCommand(
+	session: string,
+	command: string[],
+): Promise<void> {
+	if (!(await hasSession(session))) {
+		throw new Error(`Session ${session} not found`);
+	}
+	await $`tmux send-keys -t ${session} C-c`.nothrow();
+	await Bun.sleep(150);
+	await $`tmux send-keys -t ${session} clear Enter`.nothrow();
+	await Bun.sleep(150);
+	await $`tmux clear-history -t ${session}`.nothrow();
+	const cmdString = command.join(" ");
+	await $`tmux send-keys -t ${session} ${cmdString} Enter`.quiet();
 }
 
 export async function sendEscape(session: string): Promise<void> {
@@ -352,7 +377,18 @@ export async function capturePane(
 	return result.stdout.toString();
 }
 
+// Bilinçli olarak durdurulan session'lar: arka plandaki waitFor* döngüleri
+// "terminated by user" hata event'i üretmek yerine sessizce sonlansın diye işaretlenir.
+const stoppingSessions = new Set<string>();
+
+export function isSessionStopping(session: string): boolean {
+	return stoppingSessions.has(session);
+}
+
 export async function killSession(session: string): Promise<void> {
+	stoppingSessions.add(session);
+	// İşaret kalıcı birikinti yapmasın: bekleyen döngülerin fark etmesine yetecek süre tut.
+	setTimeout(() => stoppingSessions.delete(session), 60_000);
 	if (await hasSession(session)) {
 		await $`tmux kill-session -t ${session}`.quiet();
 	}

@@ -27,34 +27,45 @@ function includesAny(output: string, patterns: string[]): boolean {
 	return patterns.some((pattern) => output.includes(pattern));
 }
 
+/**
+ * Gerçek ANS marker'larını topla. Prompt echo'sundaki talimat satırı
+ * ('End your response with "[ANS-xxx]"') cevap sayılmaz: tırnak içindeki
+ * ve talimat satırındaki marker'lar filtrelenir.
+ */
+function collectRealAnswerIds(output: string): string[] {
+	const ids: string[] = [];
+	for (const line of output.split("\n")) {
+		if (line.includes("End your response")) continue;
+		for (const match of line.matchAll(/(^|[^"])\[ANS-([a-f0-9]+)\]/g)) {
+			if (match[2]) ids.push(match[2]);
+		}
+	}
+	return ids;
+}
+
+// TUI'nin gerçekten çizildiğini gösteren işaretler. Bunlar yokken pane'deki
+// "❯ " büyük ihtimalle shell prompt'udur (boot aşaması) — input hazır sayılmaz.
+const TUI_ALIVE_PATTERNS = [
+	"? for shortcuts",
+	"context left",
+	"% left",
+	"bypass permissions",
+	"Claude Code",
+	"OpenAI Codex",
+	"model:",
+	"Type your message",
+	"How can I help",
+	"esc to interrupt",
+	"Esc to interrupt",
+];
+
 export function summarizeAgentOutput(
 	agent: AgentType,
 	output: string,
 ): AgentSemanticState {
 	const indicators: string[] = [];
 	const requestIds = collectMatches(output, /\[RQ-([a-f0-9]+)\]/g);
-	const answerIds = collectMatches(output, /\[ANS-([a-f0-9]+)\]/g);
-
-	const hasError = includesAny(output, [
-		"Error:",
-		"ERROR",
-		"session terminated",
-		"failed",
-	]);
-	if (hasError) {
-		indicators.push("error_text");
-		return {
-			phase: "error",
-			blocked: true,
-			ready: false,
-			needsInput: false,
-			summary: `${agent} error state detected in pane output`,
-			suggestedAction: "Inspect get_agent_output and recent events",
-			indicators,
-			requestIds,
-			answerIds,
-		};
-	}
+	const answerIds = collectRealAnswerIds(output);
 
 	const responding = includesAny(output, [
 		"Responding with",
@@ -95,13 +106,16 @@ export function summarizeAgentOutput(
 		indicators.push("startup_or_ready_text");
 	}
 
-	const awaitingInput = includesAny(output, [
-		"Type your message",
-		"How can I help",
-		"Prompt …",
-		"Prompt...",
-		"❯ ",
-	]);
+	const tuiAlive = includesAny(output, TUI_ALIVE_PATTERNS);
+	const awaitingInput =
+		tuiAlive &&
+		includesAny(output, [
+			"Type your message",
+			"How can I help",
+			"Prompt …",
+			"Prompt...",
+			"❯ ",
+		]);
 	if (awaitingInput) {
 		indicators.push("input_prompt");
 		const phase = answerIds.length > 0 ? "completed" : "awaiting_input";
@@ -156,6 +170,35 @@ export function summarizeAgentOutput(
 			needsInput: false,
 			summary: `${agent} emitted a completion marker`,
 			suggestedAction: "Collect the response via wait_for_event or poll_events",
+			indicators,
+			requestIds,
+			answerIds,
+		};
+	}
+
+	// Error tespiti bilinçli olarak EN SONDA ve sadece pane'in son satırlarında:
+	// görevin kendi çıktısındaki (test/build logları) "error"/"failed" kelimeleri
+	// yanlış alarm üretmesin. Belirgin UI durumları her zaman önceliklidir.
+	const tailLines = output
+		.split("\n")
+		.map((line) => line.trim())
+		.filter(Boolean)
+		.slice(-6)
+		.join("\n");
+	const hasError = includesAny(tailLines, [
+		"Error:",
+		"session terminated",
+		"FATAL",
+	]);
+	if (hasError) {
+		indicators.push("error_text");
+		return {
+			phase: "error",
+			blocked: true,
+			ready: false,
+			needsInput: false,
+			summary: `${agent} error state detected in pane output`,
+			suggestedAction: "Inspect get_agent_output and recent events",
 			indicators,
 			requestIds,
 			answerIds,

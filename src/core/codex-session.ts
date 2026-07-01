@@ -121,6 +121,31 @@ export function findCodexResponseInRecentSessions(
 }
 
 /**
+ * Request marker'ının ([RQ-xxx]) Codex session JSONL'lerine ulaşıp ulaşmadığını kontrol et.
+ * Teslimat doğrulaması için kullanılır: prompt TUI'ye gerçekten submit edildiyse
+ * user message olarak rollout dosyasına yazılır.
+ */
+export function findCodexRequestInRecentSessions(
+	requestId: string,
+	maxFiles = 10,
+): boolean {
+	const marker = `[RQ-${requestId}]`;
+	const files = getCodexSessionFilesByMtime(maxFiles);
+
+	for (const file of files) {
+		try {
+			if (readFileSync(file, "utf-8").includes(marker)) {
+				return true;
+			}
+		} catch {
+			// okunamadı, sıradakine geç
+		}
+	}
+
+	return false;
+}
+
+/**
  * Yanıttan marker'ları temizle
  */
 function cleanCodexResponse(content: string, requestId: string): string {
