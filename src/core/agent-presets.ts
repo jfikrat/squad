@@ -1,5 +1,6 @@
 import type { AgentConfig } from "../config/agents";
 import { AGENTS } from "../config/agents";
+import { ensureCodexHomeForSlot } from "./codex-home";
 
 export const AVAILABLE_AGENTS = [
 	"codex_medium",
@@ -40,10 +41,15 @@ export function resolveAgentConfig(agentName: AgentType): AgentConfig | null {
 		const resolved = CODEX_PRESETS[preset];
 		if (!resolved) return null;
 		const base = AGENTS.codex;
+		// Slot başına izole CODEX_HOME: paylaşılan ~/.codex sqlite kilit
+		// çekişmesini ("another Codex process is using its local data") önler.
+		const codexHome = ensureCodexHomeForSlot(agentName);
 		return {
 			...base,
 			name: agentName,
 			command: [
+				"env",
+				`CODEX_HOME=${codexHome}`,
 				...base.command,
 				"-m",
 				resolved.model,

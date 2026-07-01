@@ -13,30 +13,38 @@ interface CodexEvent {
 }
 
 /**
- * Bugünün Codex session dizinini döndür
+ * Bugünün Codex session dizinini döndür.
+ * sessionsRoot verilirse (izole CODEX_HOME) onun altına bakar,
+ * verilmezse canonical ~/.codex/sessions kullanılır.
  */
-export function getCodexSessionDir(): string {
+export function getCodexSessionDir(sessionsRoot?: string): string {
 	const now = new Date();
 	const year = now.getFullYear().toString();
 	const month = (now.getMonth() + 1).toString().padStart(2, "0");
 	const day = now.getDate().toString().padStart(2, "0");
 
-	return join(homedir(), ".codex", "sessions", year, month, day);
+	const root = sessionsRoot || join(homedir(), ".codex", "sessions");
+	return join(root, year, month, day);
 }
 
 /**
  * En son Codex session dosyasını bul
  */
-export function getLatestCodexSessionFile(): string | null {
-	const files = getCodexSessionFilesByMtime();
+export function getLatestCodexSessionFile(
+	sessionsRoot?: string,
+): string | null {
+	const files = getCodexSessionFilesByMtime(undefined, sessionsRoot);
 	return files.length > 0 ? files[0] : null;
 }
 
 /**
  * Bugünün rollout JSONL dosyalarını mtime desc sıralı döndür.
  */
-export function getCodexSessionFilesByMtime(limit?: number): string[] {
-	const sessionDir = getCodexSessionDir();
+export function getCodexSessionFilesByMtime(
+	limit?: number,
+	sessionsRoot?: string,
+): string[] {
+	const sessionDir = getCodexSessionDir(sessionsRoot);
 
 	try {
 		const files = readdirSync(sessionDir)
@@ -107,8 +115,9 @@ export function findCodexResponseByRequestId(
 export function findCodexResponseInRecentSessions(
 	requestId: string,
 	maxFiles = 20,
+	sessionsRoot?: string,
 ): string | null {
-	const files = getCodexSessionFilesByMtime(maxFiles);
+	const files = getCodexSessionFilesByMtime(maxFiles, sessionsRoot);
 
 	for (const file of files) {
 		const response = findCodexResponseByRequestId(file, requestId);
@@ -128,9 +137,10 @@ export function findCodexResponseInRecentSessions(
 export function findCodexRequestInRecentSessions(
 	requestId: string,
 	maxFiles = 10,
+	sessionsRoot?: string,
 ): boolean {
 	const marker = `[RQ-${requestId}]`;
-	const files = getCodexSessionFilesByMtime(maxFiles);
+	const files = getCodexSessionFilesByMtime(maxFiles, sessionsRoot);
 
 	for (const file of files) {
 		try {

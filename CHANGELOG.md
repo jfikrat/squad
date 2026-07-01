@@ -1,6 +1,17 @@
 # Changelog
 
-## [4.2.0] — Current
+## [4.3.0] — Current
+
+### Added
+- **Per-slot CODEX_HOME isolation** — each codex slot runs in its own home under `~/.local/share/squad/codex-homes/<slot>` (auth.json, config.toml, skills, AGENTS.md symlinked from canonical `~/.codex`), eliminating the shared-sqlite "database is locked" startup death when other codex instances are active. hooks/hooks.json are deliberately not shared: the trust hash is path-keyed and a foreign path triggers a blocking interactive "Review hooks" prompt.
+
+### Fixed
+- `codex` tool handler resolved its config by hand-building the command, bypassing `resolveAgentConfig` (and thus isolation) — now unified on a single config authority
+- Response/delivery detection reads rollout JSONLs from the slot's isolated sessions root instead of the canonical `~/.codex/sessions`
+
+---
+
+## [4.2.0]
 
 ### Fixed
 - **Viewer close no longer kills the agent session** — the `trap ... kill-session` in terminal/pane fallback viewers was removed; closing the window just detaches, the agent keeps working

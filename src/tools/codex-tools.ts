@@ -1,5 +1,5 @@
 import { sendCodexPrompt } from "../agents/codex";
-import { AGENTS } from "../config/agents";
+import { type AgentType, resolveAgentConfig } from "../core/agent-presets";
 
 export const codexTool = {
 	name: "codex",
@@ -38,8 +38,6 @@ export const codexTool = {
 	},
 };
 
-const CODEX_MODEL_ID = "gpt-5.5";
-
 const REASONING_PRESETS: Record<string, string> = {
 	medium: "medium",
 	xhigh: "xhigh",
@@ -75,14 +73,20 @@ export async function handleCodex(args: {
 			],
 		};
 	}
-	const command = [...AGENTS.codex.command, "-m", CODEX_MODEL_ID];
-	command.push("-c", `model_reasoning_effort="${reasoning}"`);
-
-	const config = {
-		...AGENTS.codex,
-		name: `codex_${args.model}`,
-		command,
-	};
+	// Komut kurulumu TEK otoriteden: resolveAgentConfig hem model/reasoning
+	// arg'larini hem de izole CODEX_HOME env prefix'ini ekler. Burada elle
+	// komut kurmak, izolasyonun bypass edilmesine yol acmisti.
+	const config = resolveAgentConfig(`codex_${args.model}` as AgentType);
+	if (!config) {
+		return {
+			content: [
+				{
+					type: "text",
+					text: `Error: Could not resolve agent config for codex_${args.model}`,
+				},
+			],
+		};
+	}
 
 	const message =
 		args.model === "xhigh"

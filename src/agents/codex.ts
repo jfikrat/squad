@@ -1,5 +1,6 @@
 import type { AgentConfig } from "../config/agents";
 import { handleAutoDismiss } from "../core/agent-ui";
+import { codexSessionsRootForSlot } from "../core/codex-home";
 import {
 	findCodexRequestInRecentSessions,
 	findCodexResponseInRecentSessions,
@@ -172,7 +173,10 @@ async function verifyDelivery(
 		if (output.includes(marker)) {
 			return;
 		}
-		if (findCodexRequestInRecentSessions(requestId)) {
+		const sessionsRoot = codexSessionsRootForSlot(
+			configNameFromSession(sessionName),
+		);
+		if (findCodexRequestInRecentSessions(requestId, 10, sessionsRoot)) {
 			return;
 		}
 
@@ -325,8 +329,12 @@ async function waitForCodexResponse(
 			);
 		}
 
-		// Birden fazla Codex session dosyasında yanıtı ara.
-		const response = findCodexResponseInRecentSessions(requestId, 30);
+		// Birden fazla Codex session dosyasında yanıtı ara (slot'un izole home'unda).
+		const response = findCodexResponseInRecentSessions(
+			requestId,
+			30,
+			codexSessionsRootForSlot(configNameFromSession(sessionName)),
+		);
 		if (response) {
 			return response;
 		}
