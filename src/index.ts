@@ -105,6 +105,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 					message: string;
 					allowFileEdits: boolean;
 					waitForResponse?: boolean;
+					workDir?: string;
 				},
 			);
 
@@ -123,6 +124,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 						| "claude_sonnet"
 						| "claude_opus";
 					lines?: number;
+					workDir?: string;
 				},
 			);
 
@@ -135,6 +137,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 						| "claude_sonnet"
 						| "claude_opus";
 					lines?: number;
+					workDir?: string;
 				},
 			);
 
@@ -147,6 +150,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 						| "claude_sonnet"
 						| "claude_opus";
 					peek?: boolean;
+					workDir?: string;
 				},
 			);
 
@@ -165,6 +169,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 						| "error";
 					timeoutMs?: number;
 					pollIntervalMs?: number;
+					workDir?: string;
 				},
 			);
 
@@ -176,11 +181,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 						| "codex_xhigh"
 						| "claude_sonnet"
 						| "claude_opus";
+					workDir?: string;
 				},
 			);
 
 		case "cleanup":
-			return handleCleanup();
+			return handleCleanup(args as { workDir?: string } | undefined);
 
 		case "task_graph":
 			return handleTaskGraph(

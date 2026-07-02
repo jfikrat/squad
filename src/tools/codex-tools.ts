@@ -76,7 +76,11 @@ export async function handleCodex(args: {
 	// Komut kurulumu TEK otoriteden: resolveAgentConfig hem model/reasoning
 	// arg'larini hem de izole CODEX_HOME env prefix'ini ekler. Burada elle
 	// komut kurmak, izolasyonun bypass edilmesine yol acmisti.
-	const config = resolveAgentConfig(`codex_${args.model}` as AgentType);
+	// workDir gecirilir: CODEX_HOME odaya (slot + workDir) ozel olur.
+	const config = resolveAgentConfig(
+		`codex_${args.model}` as AgentType,
+		args.workDir,
+	);
 	if (!config) {
 		return {
 			content: [

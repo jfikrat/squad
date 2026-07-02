@@ -2,7 +2,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import { sendClaudePrompt } from "../agents/claude";
 import { AGENTS } from "../config/agents";
-import { getSessionName } from "./instance";
+import { clearEvents } from "./agent-events";
+import { roomKey, sessionNameForRoom } from "./rooms";
 import { killSession } from "./tmux-manager";
 
 export interface TaskNode {
@@ -266,8 +267,9 @@ async function executeTask(
 
 		return result.response || "(empty response)";
 	} finally {
-		// Always clean up the unique session
-		const sessionName = getSessionName(config.name);
-		await killSession(sessionName);
+		// Always clean up the unique session + orphan event queue
+		// (sync sendClaudePrompt oda adlandırması kullanır: slot + workDir)
+		await killSession(sessionNameForRoom(config.name, workDir));
+		clearEvents(roomKey(config.name, workDir));
 	}
 }

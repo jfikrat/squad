@@ -31,6 +31,8 @@ export interface AgentConfig {
 	readyPatterns: string[];
 	sessionPath?: string;
 	responseDetection: "marker" | "jsonl";
+	/** Codex: bu odanın izole CODEX_HOME'una ait rollout JSONL kökü */
+	codexSessionsRoot?: string;
 }
 
 export const AGENTS: Record<string, AgentConfig> = {

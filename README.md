@@ -151,11 +151,19 @@ src/
 
 - **tmux-based**: Each agent runs in a separate tmux session
 - **Instance isolation**: Each MCP instance gets a unique ID — sessions never collide
+- **Room isolation (v4.5)**: Persistent sessions are keyed by `slot + workDir`
+  (`agents_{id}_{slot}_{wdKey}`). When one shared squad process serves multiple
+  MCP clients (e.g. behind a gateway), different projects get separate agent
+  sessions, event queues, and CODEX_HOMEs — contexts never mix. Follow-up and
+  introspection tools accept an optional `workDir` to target a specific room
+  (required only when more than one room exists for a slot).
 - **Preset-only models**: Model parameter is a required enum, no raw strings accepted
 - **Pane grid layout**: In `display: "pane"` mode, agents auto-arrange in a grid
+  (use `display: "none"` / `SQUAD_DISPLAY=none` for headless gateway deployments)
 - **Request ID system**: `[RQ-xxx]` / `[ANS-xxx]` markers for response matching
 - **No timeout**: Sessions persist indefinitely until `cleanup()` or server shutdown
-- **Instance-scoped cleanup**: `cleanup` only kills sessions owned by this instance
+- **Scoped cleanup**: `cleanup` only kills sessions owned by this instance;
+  pass `workDir` to clean a single project's sessions on a shared server
 
 ## Development
 

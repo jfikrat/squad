@@ -1,6 +1,7 @@
 import type { AgentConfig } from "../config/agents";
 import { AGENTS } from "../config/agents";
-import { ensureCodexHomeForSlot } from "./codex-home";
+import { codexSessionsRootForSlot, ensureCodexHomeForSlot } from "./codex-home";
+import { roomKey } from "./rooms";
 
 export const AVAILABLE_AGENTS = [
 	"codex_medium",
@@ -35,18 +36,24 @@ const CLAUDE_PRESETS: Record<
 	opus: { model: "claude-opus-4-7", effort: "xhigh" },
 };
 
-export function resolveAgentConfig(agentName: AgentType): AgentConfig | null {
+export function resolveAgentConfig(
+	agentName: AgentType,
+	workDir?: string,
+): AgentConfig | null {
 	if (agentName.startsWith("codex_")) {
 		const preset = agentName.replace("codex_", "") as "medium" | "xhigh";
 		const resolved = CODEX_PRESETS[preset];
 		if (!resolved) return null;
 		const base = AGENTS.codex;
-		// Slot başına izole CODEX_HOME: paylaşılan ~/.codex sqlite kilit
-		// çekişmesini ("another Codex process is using its local data") önler.
-		const codexHome = ensureCodexHomeForSlot(agentName);
+		// Oda (slot + workDir) başına izole CODEX_HOME: paylaşılan ~/.codex sqlite
+		// kilit çekişmesini ("another Codex process is using its local data") önler.
+		// workDir verilmezse (yalnızca status/görüntüleme yolları) slot köküne düşer.
+		const homeKey = workDir ? roomKey(agentName, workDir) : agentName;
+		const codexHome = ensureCodexHomeForSlot(homeKey);
 		return {
 			...base,
 			name: agentName,
+			codexSessionsRoot: codexSessionsRootForSlot(homeKey),
 			command: [
 				"env",
 				`CODEX_HOME=${codexHome}`,

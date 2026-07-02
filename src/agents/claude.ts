@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import type { AgentConfig } from "../config/agents";
+import { type PendingEvent, addEvent, clearEvents } from "../core/agent-events";
 import { handleAutoDismiss } from "../core/agent-ui";
 import {
 	findClaudeResponseByRequestId,
@@ -9,10 +10,10 @@ import {
 	getRecentClaudeSessionFiles,
 } from "../core/claude-session";
 import { getSessionName } from "../core/instance";
+import { roomKey, sessionNameForRoom } from "../core/rooms";
 import {
 	capturePane,
 	createSession,
-	getSession,
 	hasSession,
 	isSessionStopping,
 	killSession,
@@ -58,19 +59,15 @@ export interface ClaudeResult {
 	outputFile?: string;
 }
 
-export interface PendingEvent {
-	type: "tool_complete" | "session_idle" | "message_complete" | "error";
-	timestamp: Date;
-	data?: string;
-}
-
-const pendingEvents = new Map<string, PendingEvent[]>();
+export type { PendingEvent };
 
 export async function initClaudeSession(
 	config: AgentConfig,
 	workDir: string,
+	sessionNameOverride?: string,
 ): Promise<string> {
-	const sessionName = getSessionName(config.name);
+	const sessionName =
+		sessionNameOverride ?? sessionNameForRoom(config.name, workDir);
 
 	// Session zaten varsa kullan
 	if (await hasSession(sessionName)) {
@@ -214,11 +211,11 @@ export async function sendClaudePrompt(
 	const requestId = generateClaudeRequestId();
 
 	// Async mode: unique session per dispatch so multiple workers can run in parallel
-	// Sync mode: reuse the shared session (interactive conversation)
-	const effectiveConfig = !waitForResponse
-		? { ...config, name: `${config.name}_${requestId}` }
-		: config;
-	const sessionName = getSessionName(effectiveConfig.name);
+	// Sync mode: reuse the room session (slot + workDir — cross-client karışmaz)
+	const sessionName = !waitForResponse
+		? getSessionName(`${config.name}_${requestId}`)
+		: sessionNameForRoom(config.name, workDir);
+	const eventKey = roomKey(config.name, workDir);
 
 	// Resolve outputFile: relative paths become workDir-relative,
 	// if async with no outputFile, auto-generate under .squad/results/
@@ -241,9 +238,9 @@ export async function sendClaudePrompt(
 	// Yavaş kısımların tamamı: session kur, TUI'yi bekle, gönder, teslimatı doğrula.
 	const deliver = async (): Promise<void> => {
 		if (!(await hasSession(sessionName))) {
-			await initClaudeSession(effectiveConfig, workDir);
+			await initClaudeSession(config, workDir, sessionName);
 		}
-		await waitForSendable(sessionName, effectiveConfig.readyPatterns);
+		await waitForSendable(sessionName, config.readyPatterns);
 		await sendBufferNoBracket(sessionName, fullPrompt);
 		await verifyDelivery(sessionName, requestId, fullPrompt);
 		updateLastActivity(sessionName);
@@ -254,7 +251,7 @@ export async function sendClaudePrompt(
 		void deliver()
 			.then(() => waitForClaudeResponse(requestId, sessionName, workDir))
 			.then(async (response) => {
-				addEvent(config.name, {
+				addEvent(eventKey, {
 					type: "message_complete",
 					timestamp: new Date(),
 					data: response,
@@ -268,7 +265,7 @@ export async function sendClaudePrompt(
 			.catch(async (err) => {
 				const error = err as Error;
 				if (error.name !== "SessionStoppedError") {
-					addEvent(config.name, {
+					addEvent(eventKey, {
 						type: "error",
 						timestamp: new Date(),
 						data: error.message,
@@ -303,7 +300,7 @@ export async function sendClaudePrompt(
 		updateLastActivity(sessionName);
 
 		// Event ekle
-		addEvent(config.name, {
+		addEvent(eventKey, {
 			type: "message_complete",
 			timestamp: new Date(),
 			data: response,
@@ -319,7 +316,7 @@ export async function sendClaudePrompt(
 		const error = err as Error;
 
 		if (error.name !== "SessionStoppedError") {
-			addEvent(config.name, {
+			addEvent(eventKey, {
 				type: "error",
 				timestamp: new Date(),
 				data: error.message,
@@ -418,63 +415,11 @@ function configNameFromSession(
 	return sessionName.includes("claude_opus") ? "claude_opus" : "claude_sonnet";
 }
 
-export async function stopClaudeSession(config: AgentConfig): Promise<void> {
-	const sessionName = getSessionName(config.name);
+export async function stopClaudeSession(
+	config: AgentConfig,
+	workDir: string,
+): Promise<void> {
+	const sessionName = sessionNameForRoom(config.name, workDir);
 	await killSession(sessionName);
-	pendingEvents.delete(config.name);
-}
-
-function addEvent(agentName: string, event: PendingEvent): void {
-	if (!pendingEvents.has(agentName)) {
-		pendingEvents.set(agentName, []);
-	}
-	pendingEvents.get(agentName)?.push(event);
-}
-
-export function pollEvents(agentName: string, peek = false): PendingEvent[] {
-	const events = pendingEvents.get(agentName) || [];
-	if (!peek) {
-		pendingEvents.set(agentName, []);
-	}
-	return events;
-}
-
-export function consumeEvent(
-	agentName: string,
-	eventType?: PendingEvent["type"],
-): PendingEvent | undefined {
-	const events = pendingEvents.get(agentName) || [];
-	if (events.length === 0) {
-		return undefined;
-	}
-
-	const index =
-		eventType === undefined
-			? 0
-			: events.findIndex((event) => event.type === eventType);
-
-	if (index < 0) {
-		return undefined;
-	}
-
-	const [event] = events.splice(index, 1);
-	pendingEvents.set(agentName, events);
-	return event;
-}
-
-export function getClaudeStatus(config: AgentConfig): {
-	connected: boolean;
-	sessionName: string;
-	lastActivity?: Date;
-	pendingEvents: number;
-} {
-	const sessionName = getSessionName(config.name);
-	const session = getSession(sessionName);
-
-	return {
-		connected: session !== undefined,
-		sessionName,
-		lastActivity: session?.lastActivity,
-		pendingEvents: pendingEvents.get(config.name)?.length || 0,
-	};
+	clearEvents(roomKey(config.name, workDir));
 }

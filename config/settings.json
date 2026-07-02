@@ -7,5 +7,5 @@
     "model": "claude-opus-4-7"
   },
   "terminal": "alacritty",
-  "display": "pane"
+  "display": "none"
 }

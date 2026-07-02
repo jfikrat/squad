@@ -6,3 +6,4 @@ dist/
 .claude/
 CLAUDE.md
 .firecrawl/
+.tg-inbox/

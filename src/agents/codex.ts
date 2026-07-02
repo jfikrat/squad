@@ -1,4 +1,5 @@
 import type { AgentConfig } from "../config/agents";
+import { type PendingEvent, addEvent, clearEvents } from "../core/agent-events";
 import { handleAutoDismiss } from "../core/agent-ui";
 import { codexSessionsRootForSlot } from "../core/codex-home";
 import {
@@ -6,11 +7,10 @@ import {
 	findCodexResponseInRecentSessions,
 	generateCodexRequestId,
 } from "../core/codex-session";
-import { getSessionName } from "../core/instance";
+import { roomKey, sessionNameForRoom } from "../core/rooms";
 import {
 	capturePane,
 	createSession,
-	getSession,
 	hasSession,
 	isSessionStopping,
 	killSession,
@@ -63,19 +63,13 @@ export interface CodexResult {
 	queued?: boolean;
 }
 
-export interface PendingEvent {
-	type: "tool_complete" | "session_idle" | "message_complete" | "error";
-	timestamp: Date;
-	data?: string;
-}
-
-const pendingEvents = new Map<string, PendingEvent[]>();
+export type { PendingEvent };
 
 export async function initCodexSession(
 	config: AgentConfig,
 	workDir: string,
 ): Promise<string> {
-	const sessionName = getSessionName(config.name);
+	const sessionName = sessionNameForRoom(config.name, workDir);
 
 	// Session zaten varsa kullan
 	if (await hasSession(sessionName)) {
@@ -163,6 +157,7 @@ async function verifyDelivery(
 	sessionName: string,
 	requestId: string,
 	fullPrompt: string,
+	sessionsRoot: string,
 ): Promise<void> {
 	const marker = `[RQ-${requestId}]`;
 
@@ -173,9 +168,6 @@ async function verifyDelivery(
 		if (output.includes(marker)) {
 			return;
 		}
-		const sessionsRoot = codexSessionsRootForSlot(
-			configNameFromSession(sessionName),
-		);
 		if (findCodexRequestInRecentSessions(requestId, 10, sessionsRoot)) {
 			return;
 		}
@@ -207,7 +199,12 @@ export async function sendCodexPrompt(
 	allowFileEdits: boolean,
 	options?: { waitForResponse?: boolean },
 ): Promise<CodexResult> {
-	const sessionName = getSessionName(config.name);
+	// Oda kimliği: slot + workDir. Farklı projelerden (farklı client'lardan)
+	// gelen istekler farklı tmux session ve event kuyruğuna düşer.
+	const sessionName = sessionNameForRoom(config.name, workDir);
+	const eventKey = roomKey(config.name, workDir);
+	const sessionsRoot =
+		config.codexSessionsRoot ?? codexSessionsRootForSlot(config.name);
 	const waitForResponse = options?.waitForResponse ?? true;
 
 	// Request ID üret
@@ -226,7 +223,7 @@ export async function sendCodexPrompt(
 		}
 		await waitForSendable(sessionName, config);
 		await sendBuffer(sessionName, fullPrompt);
-		await verifyDelivery(sessionName, requestId, fullPrompt);
+		await verifyDelivery(sessionName, requestId, fullPrompt, sessionsRoot);
 		updateLastActivity(sessionName);
 	};
 
@@ -234,10 +231,10 @@ export async function sendCodexPrompt(
 		// Async mod: TUI boot'unu BEKLEMEDEN hemen dön — gateway timeout'una takılma.
 		// Teslimat + yanıt takibi arka planda ilerler, sonuç event olarak düşer.
 		void deliver()
-			.then(() => waitForCodexResponse(requestId, sessionName))
+			.then(() => waitForCodexResponse(requestId, sessionName, sessionsRoot))
 			.then((response) => {
 				updateLastActivity(sessionName);
-				addEvent(config.name, {
+				addEvent(eventKey, {
 					type: "message_complete",
 					timestamp: new Date(),
 					data: response,
@@ -248,7 +245,7 @@ export async function sendCodexPrompt(
 				if (error.name === "SessionStoppedError") {
 					return; // bilinçli cleanup/stop — event kirliliği yapma
 				}
-				addEvent(config.name, {
+				addEvent(eventKey, {
 					type: "error",
 					timestamp: new Date(),
 					data: error.message,
@@ -267,13 +264,17 @@ export async function sendCodexPrompt(
 		await deliver();
 
 		// Response bekle (JSONL parsing)
-		const response = await waitForCodexResponse(requestId, sessionName);
+		const response = await waitForCodexResponse(
+			requestId,
+			sessionName,
+			sessionsRoot,
+		);
 
 		// Cevap alındı, lastActivity güncelle
 		updateLastActivity(sessionName);
 
 		// Event ekle
-		addEvent(config.name, {
+		addEvent(eventKey, {
 			type: "message_complete",
 			timestamp: new Date(),
 			data: response,
@@ -289,7 +290,7 @@ export async function sendCodexPrompt(
 		const error = err as Error;
 
 		if (error.name !== "SessionStoppedError") {
-			addEvent(config.name, {
+			addEvent(eventKey, {
 				type: "error",
 				timestamp: new Date(),
 				data: error.message,
@@ -307,6 +308,7 @@ export async function sendCodexPrompt(
 async function waitForCodexResponse(
 	requestId: string,
 	sessionName: string,
+	sessionsRoot: string,
 ): Promise<string> {
 	const deadline = Date.now() + EFFECTIVE_RESPONSE_TIMEOUT_MS;
 
@@ -329,11 +331,11 @@ async function waitForCodexResponse(
 			);
 		}
 
-		// Birden fazla Codex session dosyasında yanıtı ara (slot'un izole home'unda).
+		// Birden fazla Codex session dosyasında yanıtı ara (odanın izole home'unda).
 		const response = findCodexResponseInRecentSessions(
 			requestId,
 			30,
-			codexSessionsRootForSlot(configNameFromSession(sessionName)),
+			sessionsRoot,
 		);
 		if (response) {
 			return response;
@@ -360,63 +362,11 @@ function configNameFromSession(
 	return sessionName.includes("codex_medium") ? "codex_medium" : "codex_xhigh";
 }
 
-export async function stopCodexSession(config: AgentConfig): Promise<void> {
-	const sessionName = getSessionName(config.name);
+export async function stopCodexSession(
+	config: AgentConfig,
+	workDir: string,
+): Promise<void> {
+	const sessionName = sessionNameForRoom(config.name, workDir);
 	await killSession(sessionName);
-	pendingEvents.delete(config.name);
-}
-
-function addEvent(agentName: string, event: PendingEvent): void {
-	if (!pendingEvents.has(agentName)) {
-		pendingEvents.set(agentName, []);
-	}
-	pendingEvents.get(agentName)?.push(event);
-}
-
-export function pollEvents(agentName: string, peek = false): PendingEvent[] {
-	const events = pendingEvents.get(agentName) || [];
-	if (!peek) {
-		pendingEvents.set(agentName, []);
-	}
-	return events;
-}
-
-export function consumeEvent(
-	agentName: string,
-	eventType?: PendingEvent["type"],
-): PendingEvent | undefined {
-	const events = pendingEvents.get(agentName) || [];
-	if (events.length === 0) {
-		return undefined;
-	}
-
-	const index =
-		eventType === undefined
-			? 0
-			: events.findIndex((event) => event.type === eventType);
-
-	if (index < 0) {
-		return undefined;
-	}
-
-	const [event] = events.splice(index, 1);
-	pendingEvents.set(agentName, events);
-	return event;
-}
-
-export function getCodexStatus(config: AgentConfig): {
-	connected: boolean;
-	sessionName: string;
-	lastActivity?: Date;
-	pendingEvents: number;
-} {
-	const sessionName = getSessionName(config.name);
-	const session = getSession(sessionName);
-
-	return {
-		connected: session !== undefined,
-		sessionName,
-		lastActivity: session?.lastActivity,
-		pendingEvents: pendingEvents.get(config.name)?.length || 0,
-	};
+	clearEvents(roomKey(config.name, workDir));
 }

@@ -5,8 +5,8 @@ import {
 	type AgentType,
 	resolveAgentConfig,
 } from "../core/agent-presets";
-import { getSessionName } from "../core/instance";
-import { getSession, hasSession } from "../core/tmux-manager";
+import { resolveRoom } from "../core/rooms";
+import { hasSession } from "../core/tmux-manager";
 
 export const continueAgentTool = {
 	name: "continue_agent",
@@ -34,6 +34,11 @@ export const continueAgentTool = {
 				description:
 					"Whether to block until the full response is ready. Default: true. Set false to queue the request and collect the result later.",
 			},
+			workDir: {
+				type: "string",
+				description:
+					"Which session to continue when multiple projects share this squad server (sessions are per workDir). Optional if only one session is running for this agent.",
+			},
 		},
 		required: ["agent", "message", "allowFileEdits"],
 	},
@@ -44,8 +49,23 @@ export async function handleContinueAgent(args: {
 	message: string;
 	allowFileEdits: boolean;
 	waitForResponse?: boolean;
+	workDir?: string;
 }): Promise<{ content: Array<{ type: string; text: string }> }> {
-	const config = resolveAgentConfig(args.agent);
+	// Oda çözümlemesi: workDir verildiyse deterministik, verilmediyse tek canlı
+	// oda olmalı — birden fazlaysa asla tahmin etme (cross-client karışma riski).
+	const room = resolveRoom(args.agent, args.workDir);
+	if (!room.ok) {
+		return {
+			content: [
+				{
+					type: "text",
+					text: JSON.stringify({ success: false, error: room.error }, null, 2),
+				},
+			],
+		};
+	}
+
+	const config = resolveAgentConfig(args.agent, room.workDir);
 	if (!config) {
 		return {
 			content: [
@@ -60,28 +80,8 @@ export async function handleContinueAgent(args: {
 			],
 		};
 	}
-	const liveSession = getSessionName(config.name);
-	if (!(await hasSession(liveSession))) {
-		return {
-			content: [
-				{
-					type: "text",
-					text: JSON.stringify(
-						{
-							success: false,
-							error: `Agent session is not running: ${args.agent}`,
-							sessionName: liveSession,
-						},
-						null,
-						2,
-					),
-				},
-			],
-		};
-	}
 
-	const tmuxSession = getSession(liveSession);
-	if (!tmuxSession) {
+	if (!(await hasSession(room.sessionName))) {
 		return {
 			content: [
 				{
@@ -89,9 +89,8 @@ export async function handleContinueAgent(args: {
 					text: JSON.stringify(
 						{
 							success: false,
-							error:
-								"Agent tmux session exists but is not tracked by this MCP instance",
-							sessionName: liveSession,
+							error: `Agent session is not running: ${args.agent} (workDir: ${room.workDir})`,
+							sessionName: room.sessionName,
 						},
 						null,
 						2,
@@ -104,7 +103,7 @@ export async function handleContinueAgent(args: {
 	if (args.agent.startsWith("codex_")) {
 		const result = await sendCodexPrompt(
 			config,
-			tmuxSession.workDir,
+			room.workDir,
 			args.message,
 			args.allowFileEdits,
 			{ waitForResponse: args.waitForResponse },
@@ -114,7 +113,7 @@ export async function handleContinueAgent(args: {
 
 	const result = await sendClaudePrompt(
 		config,
-		tmuxSession.workDir,
+		room.workDir,
 		args.message,
 		args.allowFileEdits,
 		{ waitForResponse: args.waitForResponse },
